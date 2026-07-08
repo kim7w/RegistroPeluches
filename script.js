@@ -103,7 +103,7 @@ function mostrarPeluches(datos){
         lista.innerHTML+=`
       <div class="tarjeta">
 
-            <img src="${p.foto}" alt="Peluche">
+          <img src="${p.foto}" alt="Peluche" class="fotoPeluche" onclick="abrirImagen('${p.foto}')">
 
             <h3>${p.nombre}</h3>
 
@@ -260,5 +260,25 @@ btnCancelar.addEventListener("click", () => {
 
 window.editarPeluche = editarPeluche;
 window.eliminarPeluche = eliminarPeluche;
+
+function abrirImagen(url){
+    const visor = document.getElementById("visorImagen");
+    const imagen = document.getElementById("imagenGrande");
+
+    imagen.src = url;
+    visor.style.display = "flex";
+}
+
+document.getElementById("cerrarVisor").addEventListener("click", () => {
+    document.getElementById("visorImagen").style.display = "none";
+});
+
+document.getElementById("visorImagen").addEventListener("click", (e) => {
+    if (e.target.id === "visorImagen") {
+        document.getElementById("visorImagen").style.display = "none";
+    }
+});
+
+window.abrirImagen = abrirImagen;
 
 cargarPeluches();
