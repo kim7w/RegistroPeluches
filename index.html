@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Peluches</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="contenedor">
+
+    <h1>🧸 Registro de Peluches</h1>
+
+    <input type="text" id="buscar" placeholder="🔍 Buscar por código, nombre o etiqueta">
+
+    <form id="formulario">
+
+        <input type="text" id="codigo" placeholder="Código" required>
+
+        <input type="text" id="nombre" placeholder="Nombre" required>
+
+        <input type="number" id="precio" placeholder="Precio" required>
+
+        <input type="text" id="etiqueta" placeholder="Etiqueta">
+
+        <input type="text" id="medida" placeholder="Medida (ej. 30 cm)">
+
+        <input type="number" id="cantidad" placeholder="Cantidad">
+
+        <input type="file" id="foto" accept="image/*">
+
+        <img id="vistaPrevia" class="vista-previa">
+
+        <textarea
+            id="observaciones"
+            placeholder="Observaciones">
+        </textarea>
+
+        <button type="submit" id="btnGuardar">
+            💾 Guardar Peluche
+        </button>
+
+        <button
+            type="button"
+            id="btnCancelar"
+            style="display:none;">
+            ❌ Cancelar edición
+        </button>
+
+    </form>
+
+    <h2 id="contador">
+        Peluches registrados: 0
+    </h2>
+
+    <div id="lista"></div>
+
+</div>
+
+<script type="module" src="script.js"></script>
+
+</body>
+</html>
