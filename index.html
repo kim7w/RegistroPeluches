@@ -3,67 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#8b5cf6">
     <title>Registro de Peluches</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
 <div class="contenedor">
 
-    <h1>🧸 Registro de Peluches</h1>
+    <header class="encabezado">
+        <div class="encabezado-icono">🧸</div>
+        <div>
+            <h1>Registro de Peluches</h1>
+            <p>Organiza tu inventario de forma fácil, rápida y bonita</p>
+        </div>
+    </header>
 
-    <input type="text" id="buscar" placeholder="🔍 Buscar por código, nombre o etiqueta">
+    <section class="resumen" aria-label="Resumen del inventario">
+        <div class="estadistica">
+            <span class="estadistica-icono">🧸</span>
+            <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">📦</span>
+            <div><strong id="totalUnidades">0</strong><small>Unidades</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">✨</span>
+            <div><strong id="totalDisponibles">0</strong><small>Disponibles</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">🏷️</span>
+            <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
+        </div>
+    </section>
 
-    <form id="formulario">
+    <section class="panel-busqueda">
+        <div class="buscador-wrap">
+            <span class="buscador-icono">🔎</span>
+            <input type="search" id="buscar" autocomplete="off"
+                   placeholder="Busca por nombre, código, color, tamaño, etiqueta..." />
+            <button type="button" id="limpiarBusqueda" class="btn-limpiar" aria-label="Limpiar búsqueda">×</button>
+        </div>
 
-        <input type="text" id="codigo" placeholder="Código" required>
+        <div class="filtros" role="group" aria-label="Filtros rápidos">
+            <button type="button" class="filtro activo" data-filtro="todos">🧸 Todos</button>
+            <button type="button" class="filtro" data-filtro="grande">📏 Grandes</button>
+            <button type="button" class="filtro" data-filtro="mediano">📐 Medianos</button>
+            <button type="button" class="filtro" data-filtro="pequeno">🤏 Pequeños</button>
+            <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles</button>
+            <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
+        </div>
 
-        <input type="text" id="nombre" placeholder="Nombre" required>
+        <div class="resultado-info">
+            <h2 id="contador">Peluches registrados: 0</h2>
+            <span id="filtroActual">Mostrando todos</span>
+        </div>
+    </section>
 
-        <input type="number" id="precio" placeholder="Precio" required>
-
-        <input type="text" id="etiqueta" placeholder="Etiqueta">
-
-        <input type="text" id="medida" placeholder="Medida (ej. 30 cm)">
-
-        <input type="number" id="cantidad" placeholder="Cantidad">
-
-        <input type="file" id="foto" accept="image/*">
-
-        <img id="vistaPrevia" class="vista-previa">
-
-        <textarea
-            id="observaciones"
-            placeholder="Observaciones">
-        </textarea>
-
-        <button type="submit" id="btnGuardar">
-            💾 Guardar Peluche
+    <section class="formulario-panel">
+        <button type="button" class="formulario-toggle" id="toggleFormulario" aria-expanded="true">
+            <span>➕ Agregar / editar peluche</span>
+            <span id="flechaFormulario">⌃</span>
         </button>
 
-        <button
-            type="button"
-            id="btnCancelar"
-            style="display:none;">
-            ❌ Cancelar edición
-        </button>
+        <form id="formulario">
+            <div class="form-grid">
+                <label>Código
+                    <input type="text" id="codigo" placeholder="Ej. OS-001" required>
+                </label>
+                <label>Nombre
+                    <input type="text" id="nombre" placeholder="Ej. Osito café" required>
+                </label>
+                <label>Precio
+                    <input type="number" id="precio" placeholder="Ej. 150" min="0" step="0.01" required>
+                </label>
+                <label>Etiqueta / categoría
+                    <input type="text" id="etiqueta" placeholder="Ej. Oso, rosa, animal...">
+                </label>
+                <label>Medida
+                    <input type="text" id="medida" placeholder="Ej. 30 cm, grande...">
+                </label>
+                <label>Cantidad
+                    <input type="number" id="cantidad" placeholder="Ej. 5" min="0">
+                </label>
+                <label>📅 Fecha de ingreso
+                    <input type="date" id="fechaIngreso">
+                </label>
+                <label class="campo-fotos">🖼️ Fotos
+                    <input type="file" id="foto" accept="image/*" multiple>
+                    <small>Puedes seleccionar varias fotos. La primera será la principal.</small>
+                </label>
+            </div>
 
-    </form>
+            <div id="galeriaPrevia" class="galeria-previa"></div>
 
-    <h2 id="contador">
-        Peluches registrados: 0
-    </h2>
+            <label>Observaciones
+                <textarea id="observaciones" rows="3" placeholder="Color, detalles, ubicación, etc."></textarea>
+            </label>
 
-    <div id="lista"></div>
+            <div class="form-botones">
+                <button type="submit" id="btnGuardar">💾 Guardar peluche</button>
+                <button type="button" id="btnCancelar" class="btn-cancelar" style="display:none;">❌ Cancelar edición</button>
+            </div>
+        </form>
+    </section>
 
+    <div id="lista" aria-live="polite"></div>
+    <div id="sinResultados" class="sin-resultados" style="display:none;">
+        <div>🧸</div>
+        <h3>No encontramos peluches</h3>
+        <p>Prueba con otra palabra o cambia el filtro.</p>
+    </div>
 </div>
 
-<<div id="visorImagen" class="visor">
-    <span id="cerrarVisor">&times;</span>
-    <img id="imagenGrande">
+<div id="visorImagen" class="visor" role="dialog" aria-modal="true" aria-label="Vista de imagen">
+    <button id="cerrarVisor" class="cerrar-visor" aria-label="Cerrar">×</button>
+    <button id="imagenAnterior" class="flecha-visor izquierda" aria-label="Imagen anterior">‹</button>
+    <img id="imagenGrande" alt="Peluche ampliado">
+    <button id="imagenSiguiente" class="flecha-visor derecha" aria-label="Imagen siguiente">›</button>
+    <div id="contadorImagenes" class="contador-imagenes"></div>
 </div>
 
 <script type="module" src="script.js"></script>
-
 </body>
 </html>
