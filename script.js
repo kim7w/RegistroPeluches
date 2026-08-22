@@ -1,19 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-
 import {
-    getFirestore,
-    collection,
-    addDoc,
-    getDocs,
-    deleteDoc,
-    doc,
-    updateDoc
+    getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-
-// ============================================================
-// FIREBASE
-// ============================================================
 
 const firebaseConfig = {
     apiKey: "AIzaSyCZIgfuXyL6_AZxPjbir7j7LIDxi3k5Xo",
@@ -27,1909 +15,487 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-
-
-// ============================================================
-// ELEMENTOS
-// ============================================================
+const CLOUDINARY_UPLOAD = "https://api.cloudinary.com/v1_1/vspx5rke/image/upload";
+const CLOUDINARY_PRESET = "peluches";
+const MINIMO_DEFECTO = 2;
 
 const formulario = document.getElementById("formulario");
+const formularioPanel = document.getElementById("formularioPanel");
+const toggleFormulario = document.getElementById("toggleFormulario");
+const flechaFormulario = document.getElementById("flechaFormulario");
 const lista = document.getElementById("lista");
 const buscar = document.getElementById("buscar");
 const contador = document.getElementById("contador");
+const limpiarBusqueda = document.getElementById("limpiarBusqueda");
+const sinResultados = document.getElementById("sinResultados");
 const foto = document.getElementById("foto");
 const galeriaPrevia = document.getElementById("galeriaPrevia");
 const btnGuardar = document.getElementById("btnGuardar");
 const btnCancelar = document.getElementById("btnCancelar");
-const limpiarBusqueda = document.getElementById("limpiarBusqueda");
-const sinResultados = document.getElementById("sinResultados");
-const cantidadLocalInput = document.getElementById("cantidadLocal");
-const cantidadBodegaInput = document.getElementById("cantidadBodega");
 
 let peluches = [];
 let editando = null;
-
 let filtroActivo = "todos";
-
 let visorFotos = [];
 let visorIndice = 0;
 
+let scanner = null;
+let scannerActivo = false;
+let movimientoId = null;
+let movimientoTipo = "entrada";
 
-// ============================================================
-// UTILIDADES
-// ============================================================
-
-const normalizar = (valor = "") =>
-    String(valor)
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .trim();
-
+const normalizar = (v = "") => String(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 function escaparHTML(valor = "") {
-    return String(valor)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+    return String(valor).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
 
-
 function obtenerFotos(p) {
-
-    const fotos = Array.isArray(p.fotos)
-        ? p.fotos.filter(Boolean)
-        : [];
-
-    if (p.foto && !fotos.includes(p.foto)) {
-        fotos.unshift(p.foto);
-    }
-
+    const fotos = Array.isArray(p.fotos) ? p.fotos.filter(Boolean) : [];
+    if (p.foto && !fotos.includes(p.foto)) fotos.unshift(p.foto);
     return [...new Set(fotos)];
 }
 
-
-function clasificarTamano(tamano = "") {
-
-    const t = normalizar(tamano);
-
-    const numeros =
-        t.match(/\d+(?:[.,]\d+)?/g)
-            ?.map(Number) || [];
-
-    if (
-        t.includes("grande") ||
-        numeros.some(n => n >= 50)
-    ) {
-        return "grande";
+function obtenerCantidad(p) {
+    // Compatibilidad con la versión anterior: Local + Bodega = existencia actual.
+    const local = Number(p.cantidadLocal ?? 0) || 0;
+    const bodega = Number(p.cantidadBodega ?? 0) || 0;
+    if (p.cantidad !== undefined && p.cantidad !== null && p.cantidadLocal === undefined && p.cantidadBodega === undefined) {
+        return Math.max(0, Number(p.cantidad) || 0);
     }
-
-    if (
-        t.includes("mediano") ||
-        t.includes("mediana") ||
-        numeros.some(n => n >= 25 && n < 50)
-    ) {
-        return "mediano";
-    }
-
-    if (
-        t.includes("pequeno") ||
-        t.includes("pequena") ||
-        numeros.some(n => n < 25)
-    ) {
-        return "pequeno";
-    }
-
-    return "";
+    return Math.max(0, local + bodega);
 }
 
-
-function obtenerCantidadLocal(p) {
-    // Compatibilidad: los registros antiguos tenían "cantidad".
-    return Math.max(
-        0,
-        Number(p.cantidadLocal ?? p.cantidad ?? 0) || 0
-    );
-}
-
-function obtenerCantidadBodega(p) {
-    return Math.max(
-        0,
-        Number(p.cantidadBodega ?? 0) || 0
-    );
-}
-
-function obtenerCantidadTotal(p) {
-    return obtenerCantidadLocal(p) + obtenerCantidadBodega(p);
+function obtenerMinimo(p) {
+    return Math.max(0, Number(p.minimo ?? MINIMO_DEFECTO) || 0);
 }
 
 function estadoPeluche(p) {
-    const local = obtenerCantidadLocal(p);
-    const bodega = obtenerCantidadBodega(p);
-
-    if (local > 0) return "Disponible";
-    if (bodega > 0) return "Solo en bodega";
-    return "Agotado";
+    const cantidad = obtenerCantidad(p);
+    if (cantidad <= 0) return "Agotado";
+    if (cantidad <= obtenerMinimo(p)) return "Poco inventario";
+    return "Disponible";
 }
 
-
-// ============================================================
-// RESUMEN
-// ============================================================
+function clasificarTamano(tamano = "") {
+    const t = normalizar(tamano);
+    const numeros = t.match(/\d+(?:[.,]\d+)?/g)?.map(Number) || [];
+    if (t.includes("grande") || numeros.some(n => n >= 50)) return "grande";
+    if (t.includes("mediano") || t.includes("mediana") || numeros.some(n => n >= 25 && n < 50)) return "mediano";
+    if (t.includes("pequeno") || t.includes("pequena") || numeros.some(n => n < 25)) return "pequeno";
+    return "";
+}
 
 function actualizarResumen() {
-    const total = peluches.length;
-
-    const local = peluches.reduce(
-        (s, p) => s + obtenerCantidadLocal(p), 0
-    );
-
-    const bodega = peluches.reduce(
-        (s, p) => s + obtenerCantidadBodega(p), 0
-    );
-
-    const unidades = local + bodega;
-
-    const disponibles = peluches.filter(
-        p => obtenerCantidadLocal(p) > 0
-    ).length;
-
-    const agotados = peluches.filter(
-        p => estadoPeluche(p) === "Agotado"
-    ).length;
-
+    const unidades = peluches.reduce((s,p) => s + obtenerCantidad(p), 0);
     const refs = {
-        totalPeluche: total,
-        totalLocal: local,
-        totalBodega: bodega,
+        totalPeluche: peluches.length,
         totalUnidades: unidades,
-        totalDisponibles: disponibles,
-        totalAgotados: agotados
+        totalDisponibles: peluches.filter(p => obtenerCantidad(p) > 0).length,
+        totalBajo: peluches.filter(p => estadoPeluche(p) === "Poco inventario").length,
+        totalAgotados: peluches.filter(p => estadoPeluche(p) === "Agotado").length
     };
-
-    Object.entries(refs).forEach(([id, value]) => {
+    Object.entries(refs).forEach(([id,value]) => {
         const el = document.getElementById(id);
         if (el) el.textContent = value;
     });
 }
 
-
-// ============================================================
-// FILTROS
-// ============================================================
-
 function coincideFiltro(p) {
-
-    if (filtroActivo === "todos") {
-        return true;
-    }
-
-    if (filtroActivo === "disponible") {
-        return obtenerCantidadLocal(p) > 0;
-    }
-
-    if (filtroActivo === "bodega") {
-        return obtenerCantidadLocal(p) === 0 &&
-               obtenerCantidadBodega(p) > 0;
-    }
-
-    if (filtroActivo === "local") {
-        return obtenerCantidadLocal(p) > 0;
-    }
-
-    if (filtroActivo === "agotado") {
-        return estadoPeluche(p) === "Agotado";
-    }
-
+    if (filtroActivo === "todos") return true;
+    if (filtroActivo === "disponible") return obtenerCantidad(p) > 0;
+    if (filtroActivo === "bajo") return estadoPeluche(p) === "Poco inventario";
+    if (filtroActivo === "agotado") return estadoPeluche(p) === "Agotado";
     return clasificarTamano(p.tamano) === filtroActivo;
 }
 
-
 function coincideBusqueda(p, texto) {
-
-    if (!texto) {
-        return true;
-    }
-
-    const campos = [
-        p.nombre,
-        p.codigo,
-        p.etiqueta,
-        p.tamano,
-        p.observaciones,
-        p.precio,
-        p.cantidad,
-        obtenerCantidadLocal(p),
-        obtenerCantidadBodega(p),
-        obtenerCantidadTotal(p),
-        p.fechaIngreso,
-        p.estado
-    ];
-
-    return normalizar(
-        campos.join(" ")
-    ).includes(
-        normalizar(texto)
-    );
+    if (!texto) return true;
+    const campos = [p.codigo,p.nombre,p.precio,p.etiqueta,p.tamano,p.observaciones,obtenerCantidad(p),p.fechaIngreso];
+    return normalizar(campos.join(" ")).includes(normalizar(texto));
 }
-
 
 function obtenerFiltrados() {
-
-    const texto = buscar.value;
-
-    return peluches.filter(
-        p =>
-            coincideFiltro(p) &&
-            coincideBusqueda(p, texto)
-    );
+    return peluches.filter(p => coincideFiltro(p) && coincideBusqueda(p, buscar?.value || ""));
 }
-
-
-// ============================================================
-// BÚSQUEDA
-// ============================================================
 
 function actualizarInterfazBusqueda() {
-
-    const texto = buscar.value.trim();
-
-    if (limpiarBusqueda) {
-        limpiarBusqueda.classList.toggle(
-            "visible",
-            Boolean(texto)
-        );
-    }
-
-
+    const texto = (buscar?.value || "").trim();
+    limpiarBusqueda?.classList.toggle("visible", Boolean(texto));
     const resultado = obtenerFiltrados();
-
-
-    if (contador) {
-
-        contador.textContent =
-            texto || filtroActivo !== "todos"
-                ? `${resultado.length} peluche${resultado.length === 1 ? "" : "s"} encontrado${resultado.length === 1 ? "" : "s"}`
-                : `Peluches registrados: ${peluches.length}`;
-    }
-
-
-    const nombresFiltro = {
-
-        todos: "Mostrando todos",
-
-        grande: "Filtro: grandes",
-
-        mediano: "Filtro: medianos",
-
-        pequeno: "Filtro: pequeños",
-
-        disponible: "Filtro: disponibles",
-
-        agotado: "Filtro: agotados"
-    };
-
-
-    const filtroActual =
-        document.getElementById("filtroActual");
-
-
-    if (filtroActual) {
-
-        filtroActual.textContent =
-            texto
-                ? `Buscando: “${texto}”`
-                : nombresFiltro[filtroActivo];
-    }
-
-
+    if (contador) contador.textContent = texto || filtroActivo !== "todos"
+        ? `${resultado.length} producto${resultado.length === 1 ? "" : "s"} encontrado${resultado.length === 1 ? "" : "s"}`
+        : `Productos registrados: ${peluches.length}`;
+    const nombres = {todos:"Mostrando todos",grande:"Filtro: grandes",mediano:"Filtro: medianos",pequeno:"Filtro: pequeños",
+        disponible:"Filtro: disponibles",bajo:"Filtro: poco inventario",agotado:"Filtro: agotados"};
+    const fa = document.getElementById("filtroActual");
+    if (fa) fa.textContent = texto ? `Buscando: “${texto}”` : nombres[filtroActivo];
     mostrarPeluches(resultado);
 }
-
-
-// ============================================================
-// TARJETAS
-// ============================================================
 
 function crearTarjeta(p) {
     const fotos = obtenerFotos(p);
     const principal = fotos[0] || "";
-
-    const local = obtenerCantidadLocal(p);
-    const bodega = obtenerCantidadBodega(p);
-    const total = obtenerCantidadTotal(p);
-
+    const cantidad = obtenerCantidad(p);
     const estado = estadoPeluche(p);
     const agotado = estado === "Agotado";
-    const soloBodega = estado === "Solo en bodega";
+    const bajo = estado === "Poco inventario";
 
-    const miniaturas = fotos.length > 1 ? `
-        <div class="miniaturas">
-            ${fotos.map((url, i) => `
-                <img
-                    src="${escaparHTML(url)}"
-                    alt="Foto ${i + 1} de ${escaparHTML(p.nombre || "peluche")}"
-                    class="${i === 0 ? "activa" : ""}"
-                    loading="lazy"
-                    onclick="cambiarFotoTarjeta(event, '${p.id}', ${i})"
-                >
-            `).join("")}
+    const miniaturas = fotos.length > 1 ? `<div class="miniaturas">${fotos.map((url,i)=>`
+        <img src="${escaparHTML(url)}" alt="Foto ${i+1}" class="${i===0?"activa":""}" loading="lazy"
+             onclick="cambiarFotoTarjeta(event,'${p.id}',${i})">`).join("")}</div>` : "";
+
+    const imagen = principal ? `<img id="foto-${p.id}" src="${escaparHTML(principal)}" alt="${escaparHTML(p.nombre||"Peluche")}" loading="lazy"
+        onclick="abrirVisorPorId('${p.id}',0)">` : `<div class="sin-foto">🧸</div>`;
+
+    const badgeClass = agotado ? "agotado" : (bajo ? "bajo" : "");
+    return `<article class="tarjeta">
+        <div class="imagen-principal">
+            ${imagen}
+            <span class="badge-estado ${badgeClass}">${estado}</span>
+            <span class="cantidad-badge">📦 ${cantidad} ${cantidad===1?"unidad":"unidades"}</span>
         </div>
-    ` : "";
-
-    const imagen = principal ? `
-        <img
-            id="foto-${p.id}"
-            src="${escaparHTML(principal)}"
-            alt="${escaparHTML(p.nombre || "Peluche")}"
-            loading="lazy"
-            onclick="abrirVisorPorId('${p.id}', 0)"
-        >
-    ` : `<div class="sin-foto">🧸</div>`;
-
-    const moverBoton = bodega > 0 ? `
-        <button type="button" class="btn-mover"
-            onclick="pasarAlLocal('${p.id}')">
-            🔄 Pasar al local
-        </button>
-    ` : "";
-
-    return `
-        <article class="tarjeta">
-            <div class="imagen-principal">
-                ${imagen}
-
-                <span class="badge-estado ${agotado ? "agotado" : ""} ${soloBodega ? "solo-bodega" : ""}">
-                    ${soloBodega ? "📦 SOLO EN BODEGA" : estado}
-                </span>
-
-                <span class="cantidad-badge">
-                    📊 ${total} total
-                </span>
+        ${miniaturas}
+        <div class="info">
+            <h3>${escaparHTML(p.nombre || "Sin nombre")}</h3>
+            <div class="etiquetas">
+                ${p.etiqueta ? `<span class="etiqueta-chip">🏷️ ${escaparHTML(p.etiqueta)}</span>` : ""}
+                ${p.tamano ? `<span class="etiqueta-chip">📏 ${escaparHTML(p.tamano)}</span>` : ""}
             </div>
-
-            ${miniaturas}
-
-            <div class="info">
-                <h3>${escaparHTML(p.nombre || "Sin nombre")}</h3>
-
-                <div class="etiquetas">
-                    ${p.etiqueta ? `<span class="etiqueta-chip">🏷️ ${escaparHTML(p.etiqueta)}</span>` : ""}
-                    ${p.tamano ? `<span class="etiqueta-chip">📏 ${escaparHTML(p.tamano)}</span>` : ""}
-                </div>
-
-                <div class="precio">Q${escaparHTML(p.precio ?? "0")}</div>
-
-                <div class="datos">
-                    <div class="dato">
-                        <small>CÓDIGO</small>
-                        <strong>${escaparHTML(p.codigo || "—")}</strong>
-                    </div>
-
-                    <div class="dato dato-local">
-                        <small>🏪 LOCAL</small>
-                        <strong>${local}</strong>
-                    </div>
-
-                    <div class="dato dato-bodega">
-                        <small>📦 BODEGA</small>
-                        <strong>${bodega}</strong>
-                    </div>
-
-                    <div class="dato">
-                        <small>📊 TOTAL</small>
-                        <strong>${total}</strong>
-                    </div>
-
-                    <div class="dato">
-                        <small>FECHA</small>
-                        <strong>${escaparHTML(p.fechaIngreso || "—")}</strong>
-                    </div>
-
-                    <div class="dato">
-                        <small>FOTOS</small>
-                        <strong>${fotos.length}</strong>
-                    </div>
-                </div>
-
-                ${p.observaciones ? `
-                    <p class="observaciones">💬 ${escaparHTML(p.observaciones)}</p>
-                ` : ""}
+            <div class="precio">Q${escaparHTML(p.precio ?? "0")}</div>
+            <div class="datos">
+                <div class="dato"><small>CÓDIGO</small><strong>${escaparHTML(p.codigo||"—")}</strong></div>
+                <div class="dato ${bajo?"alerta":""}"><small>📦 EXISTENCIA</small><strong>${cantidad}</strong></div>
+                <div class="dato"><small>⚠️ MÍNIMO</small><strong>${obtenerMinimo(p)}</strong></div>
+                <div class="dato"><small>📏 MEDIDA</small><strong>${escaparHTML(p.tamano||"—")}</strong></div>
+                <div class="dato"><small>📅 INGRESO</small><strong>${escaparHTML(p.fechaIngreso||"—")}</strong></div>
+                <div class="dato"><small>📷 FOTOS</small><strong>${fotos.length}</strong></div>
             </div>
-
-            <div class="botones">
-                ${moverBoton}
-                <button type="button" onclick="editarPeluche('${p.id}')">✏️ Editar</button>
-                <button type="button" onclick="eliminarPeluche('${p.id}')">🗑️ Eliminar</button>
-            </div>
-        </article>
-    `;
+            ${p.observaciones ? `<p class="observaciones">💬 ${escaparHTML(p.observaciones)}</p>` : ""}
+        </div>
+        <div class="botones">
+            <button class="btn-entrada" type="button" onclick="abrirMovimiento('${p.id}','entrada')">➕ Entrada</button>
+            <button class="btn-salida" type="button" onclick="abrirMovimiento('${p.id}','salida')">➖ Salida</button>
+            <button class="btn-editar" type="button" onclick="editarPeluche('${p.id}')">✏️ Editar</button>
+            <button class="btn-eliminar" type="button" onclick="eliminarPeluche('${p.id}')">🗑️</button>
+        </div>
+    </article>`;
 }
 
 function mostrarPeluches(datos) {
+    if (!lista) return;
+    lista.innerHTML = datos.map(crearTarjeta).join("");
+    if (sinResultados) sinResultados.style.display = datos.length ? "none" : "block";
+}
 
-    if (!lista) {
-        return;
-    }
-
-    lista.innerHTML =
-        datos.map(crearTarjeta).join("");
-
-
-    if (sinResultados) {
-
-        sinResultados.style.display =
-            datos.length
-                ? "none"
-                : "block";
+async function cargarPeluches() {
+    try {
+        lista.innerHTML = `<div class="sin-resultados"><div>⏳</div><p>Cargando inventario...</p></div>`;
+        const consulta = await getDocs(collection(db,"peluches"));
+        peluches = [];
+        consulta.forEach(d => peluches.push({id:d.id,...d.data()}));
+        actualizarResumen();
+        actualizarInterfazBusqueda();
+    } catch(error) {
+        console.error(error);
+        lista.innerHTML = `<div class="sin-resultados"><div>⚠️</div><h3>No se pudo cargar el inventario</h3><p>Revisa tu conexión e inténtalo de nuevo.</p></div>`;
     }
 }
 
-
-// ============================================================
-// FOTOS - PREVISUALIZACIÓN
-// ============================================================
-
-function mostrarPrevisualizaciones(files) {
-
-    if (!galeriaPrevia) {
-        return;
-    }
-
-    galeriaPrevia.innerHTML = "";
-
-
-    [...files].forEach(file => {
-
-        if (!file.type.startsWith("image/")) {
-            return;
-        }
-
-
-        const url =
-            URL.createObjectURL(file);
-
-
-        const img =
-            document.createElement("img");
-
-
-        img.src = url;
-
-        img.alt = "Vista previa";
-
-
-        img.onload = () => {
+async function comprimirImagen(archivo,maxSize=1600,calidad=.80) {
+    if (archivo.type==="image/gif" || archivo.type==="image/svg+xml") return archivo;
+    return new Promise(resolve=>{
+        const imagen=new Image(), url=URL.createObjectURL(archivo);
+        imagen.onload=()=>{
             URL.revokeObjectURL(url);
+            let ancho=imagen.naturalWidth, alto=imagen.naturalHeight;
+            if(ancho>maxSize || alto>maxSize){const escala=Math.min(maxSize/ancho,maxSize/alto);ancho=Math.round(ancho*escala);alto=Math.round(alto*escala)}
+            const canvas=document.createElement("canvas");canvas.width=ancho;canvas.height=alto;
+            const ctx=canvas.getContext("2d");if(!ctx){resolve(archivo);return}
+            ctx.drawImage(imagen,0,0,ancho,alto);
+            canvas.toBlob(blob=>{
+                resolve(blob?new File([blob],archivo.name.replace(/\.[^/.]+$/,"")+".webp",{type:"image/webp",lastModified:Date.now()}):archivo);
+            },"image/webp",calidad);
         };
-
-
-        galeriaPrevia.appendChild(img);
-
+        imagen.onerror=()=>{URL.revokeObjectURL(url);resolve(archivo)}; imagen.src=url;
     });
 }
 
-
-if (foto) {
-
-    foto.addEventListener(
-        "change",
-        () => mostrarPrevisualizaciones(
-            foto.files
-        )
-    );
-}
-
-
-// ============================================================
-// COMPRESIÓN DE IMÁGENES
-// ============================================================
-
-async function comprimirImagen(
-    archivo,
-    maxSize = 1600,
-    calidad = 0.80
-) {
-
-    // GIF y SVG se mantienen originales
-    // para evitar problemas con animaciones
-    // o gráficos vectoriales.
-
-    if (
-        archivo.type === "image/gif" ||
-        archivo.type === "image/svg+xml"
-    ) {
-        return archivo;
-    }
-
-
-    return new Promise((resolve, reject) => {
-
-        const imagen =
-            new Image();
-
-        const url =
-            URL.createObjectURL(archivo);
-
-
-        imagen.onload = () => {
-
-            URL.revokeObjectURL(url);
-
-
-            let ancho =
-                imagen.naturalWidth;
-
-            let alto =
-                imagen.naturalHeight;
-
-
-            // Reducir solamente si es demasiado grande
-
-            if (
-                ancho > maxSize ||
-                alto > maxSize
-            ) {
-
-                const escala =
-                    Math.min(
-                        maxSize / ancho,
-                        maxSize / alto
-                    );
-
-                ancho =
-                    Math.round(ancho * escala);
-
-                alto =
-                    Math.round(alto * escala);
-            }
-
-
-            const canvas =
-                document.createElement("canvas");
-
-
-            canvas.width = ancho;
-            canvas.height = alto;
-
-
-            const contexto =
-                canvas.getContext("2d");
-
-
-            if (!contexto) {
-
-                resolve(archivo);
-
-                return;
-            }
-
-
-            contexto.drawImage(
-                imagen,
-                0,
-                0,
-                ancho,
-                alto
-            );
-
-
-            canvas.toBlob(
-                blob => {
-
-                    if (!blob) {
-
-                        resolve(archivo);
-
-                        return;
-                    }
-
-
-                    const nuevoArchivo =
-                        new File(
-                            [blob],
-                            archivo.name.replace(
-                                /\.[^/.]+$/,
-                                ""
-                            ) + ".webp",
-                            {
-                                type: "image/webp",
-                                lastModified:
-                                    Date.now()
-                            }
-                        );
-
-
-                    resolve(nuevoArchivo);
-
-                },
-                "image/webp",
-                calidad
-            );
-
-        };
-
-
-        imagen.onerror = () => {
-
-            URL.revokeObjectURL(url);
-
-            resolve(archivo);
-        };
-
-
-        imagen.src = url;
-
-    });
-}
-
-
-// ============================================================
-// SUBIR IMAGEN A CLOUDINARY
-// ============================================================
-
-async function subirImagenCloudinary(
-    archivo
-) {
-
-    if (!archivo) {
-        return "";
-    }
-
-
-    // ⭐ NUEVO:
-    // comprimir antes de subir
-
-    const archivoOptimizado =
-        await comprimirImagen(archivo);
-
-
-    const datos =
-        new FormData();
-
-
-    datos.append(
-        "file",
-        archivoOptimizado
-    );
-
-
-    datos.append(
-        "upload_preset",
-        "peluches"
-    );
-
-
-    const respuesta =
-        await fetch(
-            "https://api.cloudinary.com/v1_1/vspx5rke/image/upload",
-            {
-                method: "POST",
-                body: datos
-            }
-        );
-
-
-    if (!respuesta.ok) {
-
-        throw new Error(
-            "No se pudo subir una imagen."
-        );
-    }
-
-
-    const resultado =
-        await respuesta.json();
-
-
+async function subirImagenCloudinary(archivo) {
+    if(!archivo) return "";
+    const optimizado=await comprimirImagen(archivo);
+    const datos=new FormData();datos.append("file",optimizado);datos.append("upload_preset",CLOUDINARY_PRESET);
+    const respuesta=await fetch(CLOUDINARY_UPLOAD,{method:"POST",body:datos});
+    if(!respuesta.ok) throw new Error("No se pudo subir una imagen.");
+    const resultado=await respuesta.json();
     return resultado.secure_url || "";
 }
 
-
-// ============================================================
-// CARGAR PELUCHES
-// ============================================================
-
-async function cargarPeluches() {
-
-    try {
-
-        if (lista) {
-
-            lista.innerHTML = `
-                <div class="sin-resultados">
-                    <div>⏳</div>
-                    <p>Cargando peluches...</p>
-                </div>
-            `;
-        }
-
-
-        const consulta =
-            await getDocs(
-                collection(
-                    db,
-                    "peluches"
-                )
-            );
-
-
-        peluches = [];
-
-
-        consulta.forEach(documento => {
-
-            peluches.push({
-
-                id: documento.id,
-
-                ...documento.data()
-
-            });
-
-        });
-
-
-        actualizarResumen();
-
-        actualizarInterfazBusqueda();
-
-
-    } catch (error) {
-
-        console.error(error);
-
-
-        if (lista) {
-
-            lista.innerHTML = `
-                <div class="sin-resultados">
-                    <div>⚠️</div>
-
-                    <h3>
-                        No se pudo cargar el inventario
-                    </h3>
-
-                    <p>
-                        Revisa tu conexión e inténtalo de nuevo.
-                    </p>
-                </div>
-            `;
-        }
-    }
-}
-
-
-// ============================================================
-// GUARDAR / EDITAR
-// ============================================================
-
-if (formulario) {
-
-    formulario.addEventListener(
-        "submit",
-        async e => {
-
-            e.preventDefault();
-
-
-            const textoOriginal =
-                btnGuardar
-                    ? btnGuardar.textContent
-                    : "";
-
-
-            if (btnGuardar) {
-
-                btnGuardar.disabled = true;
-
-                btnGuardar.textContent =
-                    "⏳ Guardando...";
-            }
-
-
-            try {
-
-                const codigo =
-                    document
-                        .getElementById("codigo")
-                        .value
-                        .trim();
-
-
-                const nombre =
-                    document
-                        .getElementById("nombre")
-                        .value
-                        .trim();
-
-
-                const precio =
-                    document
-                        .getElementById("precio")
-                        .value;
-
-
-                const etiqueta =
-                    document
-                        .getElementById("etiqueta")
-                        .value
-                        .trim();
-
-
-                const tamano =
-                    document
-                        .getElementById("medida")
-                        .value
-                        .trim();
-
-
-                const cantidadLocal =
-                    document
-                        .getElementById("cantidadLocal")
-                        .value;
-
-                const cantidadBodega =
-                    document
-                        .getElementById("cantidadBodega")
-                        .value;
-
-                const local = Math.max(0, Number(cantidadLocal) || 0);
-                const bodega = Math.max(0, Number(cantidadBodega) || 0);
-
-
-                const observaciones =
-                    document
-                        .getElementById("observaciones")
-                        .value
-                        .trim();
-
-
-                const fechaIngreso =
-                    document
-                        .getElementById("fechaIngreso")
-                        ?.value || "";
-
-
-                let fotos = [];
-
-
-                // ==================================================
-                // FOTOS
-                // ==================================================
-
-                if (
-                    foto &&
-                    foto.files &&
-                    foto.files.length
-                ) {
-
-                    const archivos =
-                        [...foto.files];
-
-
-                    // Las imágenes se suben en paralelo
-                    // para ahorrar tiempo.
-
-                    fotos =
-                        (
-                            await Promise.all(
-                                archivos.map(
-                                    subirImagenCloudinary
-                                )
-                            )
-                        ).filter(Boolean);
-
-
-                } else if (editando) {
-
-                    const existente =
-                        peluches.find(
-                            p =>
-                                p.id === editando
-                        );
-
-
-                    fotos =
-                        existente
-                            ? obtenerFotos(existente)
-                            : [];
-                }
-
-
-                // ==================================================
-                // DATOS
-                // ==================================================
-
-                const datos = {
-
-                    codigo,
-
-                    etiqueta,
-
-                    nombre,
-
-                    precio,
-
-                    tamano,
-
-                    cantidadLocal: local,
-                    cantidadBodega: bodega,
-                    // Compatibilidad con registros antiguos.
-                    cantidad: local,
-
-                    observaciones,
-
-                    foto:
-                        fotos[0] || "",
-
-                    fotos,
-
-                    fechaIngreso,
-
-                    estado:
-                        local > 0
-                            ? "Disponible"
-                            : (bodega > 0 ? "Solo en bodega" : "Agotado")
-                };
-
-
-                // ==================================================
-                // EDITAR
-                // ==================================================
-
-                if (editando) {
-
-                    const id =
-                        editando;
-
-
-                    await updateDoc(
-                        doc(
-                            db,
-                            "peluches",
-                            id
-                        ),
-                        datos
-                    );
-
-
-                    // ⭐ MUY IMPORTANTE:
-                    // actualizar solamente el producto
-                    // en memoria.
-
-                    const indice =
-                        peluches.findIndex(
-                            p =>
-                                p.id === id
-                        );
-
-
-                    if (indice !== -1) {
-
-                        peluches[indice] = {
-
-                            id,
-
-                            ...datos
-                        };
-                    }
-
-
-                }
-
-                // ==================================================
-                // NUEVO PRODUCTO
-                // ==================================================
-
-                else {
-
-                    const nuevoDocumento =
-                        await addDoc(
-                            collection(
-                                db,
-                                "peluches"
-                            ),
-                            datos
-                        );
-
-
-                    // ⭐ En lugar de volver a descargar
-                    // TODOS los productos, agregamos
-                    // solamente el nuevo.
-
-                    peluches.unshift({
-
-                        id:
-                            nuevoDocumento.id,
-
-                        ...datos
-                    });
-                }
-
-
-                // ==================================================
-                // ACTUALIZAR PANTALLA
-                // ==================================================
-
-                actualizarResumen();
-
-                actualizarInterfazBusqueda();
-
-
-                // Limpiar formulario
-
-                formulario.reset();
-
-
-                if (galeriaPrevia) {
-                    galeriaPrevia.innerHTML = "";
-                }
-
-
-                editando = null;
-
-
-                if (btnGuardar) {
-
-                    btnGuardar.textContent =
-                        "💾 Guardar peluche";
-                }
-
-
-                if (btnCancelar) {
-
-                    btnCancelar.style.display =
-                        "none";
-                }
-
-
-                // Volver arriba
-
-                window.scrollTo({
-                    top: 0,
-                    behavior: "smooth"
-                });
-
-
-            } catch (error) {
-
-                console.error(error);
-
-
-                alert(
-                    "No se pudo guardar el peluche. Revisa tu conexión e inténtalo de nuevo."
-                );
-
-
-            } finally {
-
-                if (btnGuardar) {
-
-                    btnGuardar.disabled = false;
-
-
-                    if (!editando) {
-
-                        btnGuardar.textContent =
-                            "💾 Guardar peluche";
-
-                    } else {
-
-                        btnGuardar.textContent =
-                            textoOriginal;
-                    }
-                }
-            }
-        }
-    );
-}
-
-
-// ============================================================
-// BÚSQUEDA
-// ============================================================
-
-if (buscar) {
-
-    buscar.addEventListener(
-        "input",
-        actualizarInterfazBusqueda
-    );
-}
-
-
-if (limpiarBusqueda) {
-
-    limpiarBusqueda.addEventListener(
-        "click",
-        () => {
-
-            buscar.value = "";
-
-            buscar.focus();
-
-            actualizarInterfazBusqueda();
-        }
-    );
-}
-
-
-// ============================================================
-// FILTROS
-// ============================================================
-
-document
-    .querySelectorAll(".filtro")
-    .forEach(boton => {
-
-        boton.addEventListener(
-            "click",
-            () => {
-
-                filtroActivo =
-                    boton.dataset.filtro;
-
-
-                document
-                    .querySelectorAll(".filtro")
-                    .forEach(b =>
-                        b.classList.remove(
-                            "activo"
-                        )
-                    );
-
-
-                boton.classList.add(
-                    "activo"
-                );
-
-
-                actualizarInterfazBusqueda();
-            }
-        );
+if(foto) foto.addEventListener("change",()=>{
+    galeriaPrevia.innerHTML="";
+    [...foto.files].forEach(file=>{
+        if(!file.type.startsWith("image/")) return;
+        const url=URL.createObjectURL(file);const img=document.createElement("img");img.src=url;img.alt="Vista previa";
+        img.onload=()=>URL.revokeObjectURL(url);galeriaPrevia.appendChild(img);
     });
+});
 
-
-// ============================================================
-// MOVER DE BODEGA → LOCAL
-// ============================================================
-
-async function pasarAlLocal(id) {
-    const p = peluches.find(item => item.id === id);
-
-    if (!p) return;
-
-    const bodegaActual = obtenerCantidadBodega(p);
-
-    if (bodegaActual <= 0) {
-        alert("Este peluche no tiene unidades en bodega.");
-        return;
-    }
-
-    const respuesta = prompt(
-        `¿Cuántas unidades deseas pasar al local?\n\nEn bodega hay ${bodegaActual}.`,
-        "1"
-    );
-
-    if (respuesta === null) return;
-
-    const cantidadMover = Number(respuesta);
-
-    if (
-        !Number.isInteger(cantidadMover) ||
-        cantidadMover <= 0 ||
-        cantidadMover > bodegaActual
-    ) {
-        alert(`Ingresa un número entero entre 1 y ${bodegaActual}.`);
-        return;
-    }
-
-    const nuevoLocal = obtenerCantidadLocal(p) + cantidadMover;
-    const nuevaBodega = bodegaActual - cantidadMover;
-
-    try {
-        await updateDoc(
-            doc(db, "peluches", id),
-            {
-                cantidadLocal: nuevoLocal,
-                cantidadBodega: nuevaBodega,
-                cantidad: nuevoLocal,
-                estado: nuevoLocal > 0
-                    ? "Disponible"
-                    : (nuevaBodega > 0 ? "Solo en bodega" : "Agotado")
-            }
-        );
-
-        p.cantidadLocal = nuevoLocal;
-        p.cantidadBodega = nuevaBodega;
-        p.cantidad = nuevoLocal;
-        p.estado = nuevoLocal > 0
-            ? "Disponible"
-            : (nuevaBodega > 0 ? "Solo en bodega" : "Agotado");
-
-        actualizarResumen();
-        actualizarInterfazBusqueda();
-
-    } catch (error) {
-        console.error(error);
-        alert("No se pudo mover el inventario. Revisa tu conexión e inténtalo de nuevo.");
-    }
+function abrirFormulario() {
+    formulario.hidden=false;
+    formularioPanel?.classList.remove("colapsado");
+    toggleFormulario?.setAttribute("aria-expanded","true");
+    if(flechaFormulario) flechaFormulario.textContent="⌃";
+    formulario.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
-// ============================================================
-// ELIMINAR
-// ============================================================
+function cerrarFormulario() {
+    formulario.hidden=true;
+    formularioPanel?.classList.add("colapsado");
+    toggleFormulario?.setAttribute("aria-expanded","false");
+    if(flechaFormulario) flechaFormulario.textContent="⌄";
+}
+
+toggleFormulario?.addEventListener("click",()=>{
+    if(formulario.hidden) abrirFormulario(); else cerrarFormulario();
+});
+
+document.getElementById("btnNuevo")?.addEventListener("click",()=>{
+    cancelarEdicion();
+    abrirFormulario();
+    document.getElementById("codigo")?.focus();
+});
+
+async function guardarFormulario(e) {
+    e.preventDefault();
+    const original=btnGuardar.textContent;
+    btnGuardar.disabled=true;btnGuardar.textContent="⏳ Guardando...";
+
+    try {
+        const codigo=document.getElementById("codigo").value.trim();
+        const nombre=document.getElementById("nombre").value.trim();
+        const precio=document.getElementById("precio").value;
+        const etiqueta=document.getElementById("etiqueta").value.trim();
+        const tamano=document.getElementById("medida").value.trim();
+        const cantidad=Math.max(0,Number(document.getElementById("cantidad").value)||0);
+        const minimo=Math.max(0,Number(document.getElementById("minimo").value)||0);
+        const observaciones=document.getElementById("observaciones").value.trim();
+        const fechaIngreso=document.getElementById("fechaIngreso").value || "";
+        let fotos=[];
+
+        if(foto?.files?.length) fotos=(await Promise.all([...foto.files].map(subirImagenCloudinary))).filter(Boolean);
+        else if(editando){const existente=peluches.find(p=>p.id===editando);fotos=existente?obtenerFotos(existente):[]}
+
+        const existentePorCodigo=peluches.find(p=>normalizar(p.codigo)===normalizar(codigo) && p.id!==editando);
+        if(existentePorCodigo){
+            alert("Ese código ya está registrado. Busca el producto existente o usa otro código.");
+            btnGuardar.disabled=false;btnGuardar.textContent=original;return;
+        }
+
+        const datos={
+            codigo,nombre,precio,etiqueta,tamano,cantidad,minimo,observaciones,
+            foto:fotos[0]||"",fotos,fechaIngreso,
+            estado: cantidad<=0 ? "Agotado" : (cantidad<=minimo ? "Poco inventario" : "Disponible"),
+            // Normalización de registros antiguos: ya no se usa Local/Bodega.
+            cantidadLocal:cantidad,cantidadBodega:0
+        };
+
+        if(editando){
+            await updateDoc(doc(db,"peluches",editando),datos);
+            const i=peluches.findIndex(p=>p.id===editando);
+            if(i!==-1) peluches[i]={id:editando,...datos};
+        } else {
+            const nuevo=await addDoc(collection(db,"peluches"),datos);
+            peluches.unshift({id:nuevo.id,...datos});
+        }
+
+        actualizarResumen();actualizarInterfazBusqueda();
+        cancelarEdicion();
+        cerrarFormulario();
+        window.scrollTo({top:0,behavior:"smooth"});
+    } catch(error) {
+        console.error(error);
+        alert("No se pudo guardar el producto. Revisa tu conexión e inténtalo de nuevo.");
+    } finally {
+        btnGuardar.disabled=false;
+        if(!editando) btnGuardar.textContent="💾 Guardar producto"; else btnGuardar.textContent=original;
+    }
+}
+formulario?.addEventListener("submit",guardarFormulario);
+
+function editarPeluche(id) {
+    const p=peluches.find(x=>x.id===id);
+    if(!p){alert("No se encontró el producto.");return}
+    document.getElementById("codigo").value=p.codigo||"";
+    document.getElementById("nombre").value=p.nombre||"";
+    document.getElementById("precio").value=p.precio??"";
+    document.getElementById("etiqueta").value=p.etiqueta||"";
+    document.getElementById("medida").value=p.tamano||"";
+    document.getElementById("cantidad").value=obtenerCantidad(p);
+    document.getElementById("minimo").value=obtenerMinimo(p);
+    document.getElementById("observaciones").value=p.observaciones||"";
+    document.getElementById("fechaIngreso").value=p.fechaIngreso||"";
+    galeriaPrevia.innerHTML=obtenerFotos(p).map(url=>`<img src="${escaparHTML(url)}" alt="Foto guardada">`).join("");
+    editando=id;btnGuardar.textContent="💾 Actualizar producto";btnCancelar.style.display="block";abrirFormulario();
+}
+
+function cancelarEdicion() {
+    formulario?.reset();galeriaPrevia.innerHTML="";editando=null;btnGuardar.textContent="💾 Guardar producto";btnCancelar.style.display="none";
+    const minimo=document.getElementById("minimo");if(minimo) minimo.value=MINIMO_DEFECTO;
+}
+btnCancelar?.addEventListener("click",()=>{cancelarEdicion();cerrarFormulario()});
 
 async function eliminarPeluche(id) {
-
-    if (
-        !confirm(
-            "¿Deseas eliminar este peluche?"
-        )
-    ) {
-        return;
-    }
-
-
-    try {
-
-        await deleteDoc(
-            doc(
-                db,
-                "peluches",
-                id
-            )
-        );
-
-
-        // ⭐ Ya no descargamos todo Firebase.
-        // Solo quitamos el producto eliminado.
-
-        peluches =
-            peluches.filter(
-                p =>
-                    p.id !== id
-            );
-
-
-        actualizarResumen();
-
-        actualizarInterfazBusqueda();
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert(
-            "No se pudo eliminar el peluche."
-        );
-    }
+    if(!confirm("¿Deseas eliminar este producto? Esta acción no se puede deshacer.")) return;
+    try{
+        await deleteDoc(doc(db,"peluches",id));
+        peluches=peluches.filter(p=>p.id!==id);
+        actualizarResumen();actualizarInterfazBusqueda();
+    }catch(error){console.error(error);alert("No se pudo eliminar el producto.")}
 }
 
-
-// ============================================================
-// EDITAR
-// ============================================================
-
-async function editarPeluche(id) {
-
-    const peluche =
-        peluches.find(
-            p =>
-                p.id === id
-        );
-
-
-    if (!peluche) {
-
-        alert(
-            "No se encontró el peluche."
-        );
-
-        return;
-    }
-
-
-    document
-        .getElementById("codigo")
-        .value =
-        peluche.codigo || "";
-
-
-    document
-        .getElementById("nombre")
-        .value =
-        peluche.nombre || "";
-
-
-    document
-        .getElementById("precio")
-        .value =
-        peluche.precio || "";
-
-
-    document
-        .getElementById("etiqueta")
-        .value =
-        peluche.etiqueta || "";
-
-
-    document
-        .getElementById("medida")
-        .value =
-        peluche.tamano || "";
-
-
-    document
-        .getElementById("cantidadLocal")
-        .value =
-        obtenerCantidadLocal(peluche);
-
-    document
-        .getElementById("cantidadBodega")
-        .value =
-        obtenerCantidadBodega(peluche);
-
-
-    document
-        .getElementById("observaciones")
-        .value =
-        peluche.observaciones || "";
-
-
-    const fecha =
-        document.getElementById(
-            "fechaIngreso"
-        );
-
-
-    if (fecha) {
-
-        fecha.value =
-            peluche.fechaIngreso || "";
-    }
-
-
-    if (galeriaPrevia) {
-
-        galeriaPrevia.innerHTML =
-            obtenerFotos(peluche)
-                .map(
-                    url =>
-                        `<img src="${escaparHTML(url)}" alt="Foto guardada">`
-                )
-                .join("");
-    }
-
-
-    editando = id;
-
-
-    if (btnGuardar) {
-
-        btnGuardar.textContent =
-            "💾 Actualizar peluche";
-    }
-
-
-    if (btnCancelar) {
-
-        btnCancelar.style.display =
-            "block";
-    }
-
-
-    formulario.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
+async function actualizarCantidad(id,nuevaCantidad,tipo,cantidadMovimiento) {
+    const p=peluches.find(x=>x.id===id);if(!p)return;
+    const nueva=Math.max(0,nuevaCantidad);
+    const movimiento={
+        tipo,cantidad:Number(cantidadMovimiento),antes:obtenerCantidad(p),despues:nueva,
+        fecha:new Date().toISOString()
+    };
+    const historial=Array.isArray(p.movimientos)?[...p.movimientos,movimiento]:[movimiento];
+    await updateDoc(doc(db,"peluches",id),{
+        cantidad:nueva,cantidadLocal:nueva,cantidadBodega:0,
+        estado:nueva<=0?"Agotado":(nueva<=obtenerMinimo(p)?"Poco inventario":"Disponible"),
+        ultimoMovimiento:movimiento,
+        movimientos:historial.slice(-50)
     });
+    p.cantidad=nueva;p.cantidadLocal=nueva;p.cantidadBodega=0;p.estado=movimiento.despues<=0?"Agotado":(nueva<=obtenerMinimo(p)?"Poco inventario":"Disponible");
+    p.ultimoMovimiento=movimiento;p.movimientos=historial.slice(-50);
+    actualizarResumen();actualizarInterfazBusqueda();
 }
 
-
-// ============================================================
-// CANCELAR EDICIÓN
-// ============================================================
-
-if (btnCancelar) {
-
-    btnCancelar.addEventListener(
-        "click",
-        () => {
-
-            formulario.reset();
-
-
-            if (galeriaPrevia) {
-                galeriaPrevia.innerHTML = "";
-            }
-
-
-            editando = null;
-
-
-            btnGuardar.textContent =
-                "💾 Guardar peluche";
-
-
-            btnCancelar.style.display =
-                "none";
-        }
-    );
+function abrirMovimiento(id,tipo) {
+    const p=peluches.find(x=>x.id===id);if(!p)return;
+    movimientoId=id;movimientoTipo=tipo;
+    document.getElementById("movimientoTitulo").textContent=tipo==="entrada"?"➕ Registrar entrada":"➖ Registrar salida";
+    document.getElementById("movimientoProducto").textContent=p.nombre||"Producto";
+    document.getElementById("movimientoActual").textContent=obtenerCantidad(p);
+    document.getElementById("movimientoCantidad").value=1;
+    document.getElementById("movimientoModal").classList.add("abierto");
+    setTimeout(()=>document.getElementById("movimientoCantidad")?.focus(),100);
 }
 
+function cerrarMovimiento(){document.getElementById("movimientoModal")?.classList.remove("abierto");movimientoId=null}
+document.getElementById("cerrarMovimiento")?.addEventListener("click",cerrarMovimiento);
+document.getElementById("btnCancelarMovimiento")?.addEventListener("click",cerrarMovimiento);
 
-// ============================================================
-// CAMBIAR FOTO DE TARJETA
-// ============================================================
+document.getElementById("btnConfirmarMovimiento")?.addEventListener("click",async()=>{
+    if(!movimientoId)return;
+    const p=peluches.find(x=>x.id===movimientoId);if(!p)return;
+    const cantidad=Number(document.getElementById("movimientoCantidad").value);
+    if(!Number.isInteger(cantidad)||cantidad<=0){alert("Ingresa una cantidad entera mayor que 0.");return}
+    const actual=obtenerCantidad(p);
+    if(movimientoTipo==="salida" && cantidad>actual){alert(`No puedes sacar ${cantidad}. Solo hay ${actual} disponibles.`);return}
+    const nueva=movimientoTipo==="entrada"?actual+cantidad:actual-cantidad;
+    const boton=document.getElementById("btnConfirmarMovimiento");boton.disabled=true;boton.textContent="Guardando...";
+    try{await actualizarCantidad(movimientoId,nueva,movimientoTipo,cantidad);cerrarMovimiento()}
+    catch(error){console.error(error);alert("No se pudo registrar el movimiento. Revisa tu conexión.")}
+    finally{boton.disabled=false;boton.textContent="Confirmar"}
+});
 
-function cambiarFotoTarjeta(
-    evento,
-    id,
-    indice
-) {
+document.getElementById("scannerModal")?.addEventListener("click",e=>{if(e.target.id==="scannerModal")cerrarScanner()});
 
-    evento.stopPropagation();
-
-
-    const p =
-        peluches.find(
-            item =>
-                item.id === id
-        );
-
-
-    if (!p) {
-        return;
-    }
-
-
-    const fotos =
-        obtenerFotos(p);
-
-
-    const img =
-        document.getElementById(
-            `foto-${id}`
-        );
-
-
-    if (
-        img &&
-        fotos[indice]
-    ) {
-
-        img.src =
-            fotos[indice];
-
-
-        img.onclick =
-            () =>
-                abrirVisorPorId(
-                    id,
-                    indice
-                );
-    }
-
-
-    const tarjeta =
-        img?.closest(
-            ".tarjeta"
-        );
-
-
-    tarjeta
-        ?.querySelectorAll(
-            ".miniaturas img"
-        )
-        .forEach(
-            (mini, i) => {
-
-                mini.classList.toggle(
-                    "activa",
-                    i === indice
-                );
-            }
-        );
-}
-
-
-// ============================================================
-// VISOR DE FOTOS
-// ============================================================
-
-function abrirVisorPorId(
-    id,
-    indice = 0
-) {
-
-    const p =
-        peluches.find(
-            item =>
-                item.id === id
-        );
-
-
-    if (!p) {
-        return;
-    }
-
-
-    visorFotos =
-        obtenerFotos(p);
-
-
-    visorIndice =
-        Math.max(
-            0,
-            Math.min(
-                indice,
-                visorFotos.length - 1
-            )
-        );
-
-
-    actualizarVisor();
-
-
-    const visor =
-        document.getElementById(
-            "visorImagen"
-        );
-
-
-    if (visor) {
-
-        visor.classList.add(
-            "abierto"
-        );
+async function abrirScanner() {
+    const modal=document.getElementById("scannerModal");modal.classList.add("abierto");
+    const estado=document.getElementById("scannerEstado");estado.textContent="Preparando cámara...";
+    try{
+        if(typeof Html5Qrcode==="undefined"){estado.textContent="No se pudo cargar el lector. También puedes escribir el código abajo.";return}
+        if(scannerActivo) return;
+        scanner=new Html5Qrcode("reader");
+        scannerActivo=true;
+        await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:280,height:130}},
+            codigo=>procesarCodigoEscaneado(codigo),
+            ()=>{});
+        estado.textContent="Cámara activa. Apunta al código de barras.";
+    }catch(error){
+        console.error(error);estado.textContent="No se pudo abrir la cámara. Revisa el permiso del navegador o escribe el código.";
+        scannerActivo=false;scanner=null;
     }
 }
 
+async function cerrarScanner() {
+    const modal=document.getElementById("scannerModal");
+    if(scanner && scannerActivo){try{await scanner.stop();}catch(e){}try{await scanner.clear();}catch(e){}}
+    scanner=null;scannerActivo=false;modal.classList.remove("abierto");
+    document.getElementById("codigoManual").value="";
+}
 
-function actualizarVisor() {
-
-    const imagen =
-        document.getElementById(
-            "imagenGrande"
-        );
-
-
-    const contadorImagenes =
-        document.getElementById(
-            "contadorImagenes"
-        );
-
-
-    if (imagen) {
-
-        imagen.src =
-            visorFotos[visorIndice] || "";
-    }
-
-
-    if (contadorImagenes) {
-
-        contadorImagenes.textContent =
-            visorFotos.length > 1
-                ? `${visorIndice + 1} / ${visorFotos.length}`
-                : "";
+function procesarCodigoEscaneado(codigo) {
+    const valor=String(codigo).trim();if(!valor)return;
+    cerrarScanner();
+    const encontrado=peluches.find(p=>normalizar(p.codigo)===normalizar(valor));
+    if(encontrado){
+        buscar.value=valor;filtroActivo="todos";
+        document.querySelectorAll(".filtro").forEach(b=>b.classList.toggle("activo",b.dataset.filtro==="todos"));
+        actualizarInterfazBusqueda();
+        setTimeout(()=>document.querySelector(".tarjeta")?.scrollIntoView({behavior:"smooth",block:"center"}),80);
+    }else{
+        cancelarEdicion();abrirFormulario();document.getElementById("codigo").value=valor;
+        document.getElementById("nombre")?.focus();
+        alert("Código no registrado. Completa los datos para crear el producto.");
     }
 }
 
+document.getElementById("btnEscanear")?.addEventListener("click",abrirScanner);
+document.getElementById("btnEscanearFormulario")?.addEventListener("click",abrirScanner);
+document.getElementById("cerrarScanner")?.addEventListener("click",cerrarScanner);
+document.getElementById("btnCodigoManual")?.addEventListener("click",()=>procesarCodigoEscaneado(document.getElementById("codigoManual").value));
+document.getElementById("codigoManual")?.addEventListener("keydown",e=>{if(e.key==="Enter")procesarCodigoEscaneado(e.target.value)});
 
-// ============================================================
-// FOTO ANTERIOR
-// ============================================================
+buscar?.addEventListener("input",actualizarInterfazBusqueda);
+limpiarBusqueda?.addEventListener("click",()=>{buscar.value="";buscar.focus();actualizarInterfazBusqueda()});
 
-const imagenAnterior =
-    document.getElementById(
-        "imagenAnterior"
-    );
+document.querySelectorAll(".filtro").forEach(boton=>boton.addEventListener("click",()=>{
+    filtroActivo=boton.dataset.filtro;
+    document.querySelectorAll(".filtro").forEach(b=>b.classList.remove("activo"));
+    boton.classList.add("activo");actualizarInterfazBusqueda();
+}));
 
-
-if (imagenAnterior) {
-
-    imagenAnterior.addEventListener(
-        "click",
-        e => {
-
-            e.stopPropagation();
-
-
-            if (
-                visorFotos.length < 2
-            ) {
-                return;
-            }
-
-
-            visorIndice =
-                (
-                    visorIndice -
-                    1 +
-                    visorFotos.length
-                ) %
-                visorFotos.length;
-
-
-            actualizarVisor();
-        }
-    );
+function cambiarFotoTarjeta(evento,id,indice){
+    evento.stopPropagation();const p=peluches.find(x=>x.id===id);if(!p)return;
+    const fotos=obtenerFotos(p),img=document.getElementById(`foto-${id}`);
+    if(img&&fotos[indice]){img.src=fotos[indice];img.onclick=()=>abrirVisorPorId(id,indice)}
+    img?.closest(".tarjeta")?.querySelectorAll(".miniaturas img").forEach((m,i)=>m.classList.toggle("activa",i===indice));
 }
 
-
-// ============================================================
-// FOTO SIGUIENTE
-// ============================================================
-
-const imagenSiguiente =
-    document.getElementById(
-        "imagenSiguiente"
-    );
-
-
-if (imagenSiguiente) {
-
-    imagenSiguiente.addEventListener(
-        "click",
-        e => {
-
-            e.stopPropagation();
-
-
-            if (
-                visorFotos.length < 2
-            ) {
-                return;
-            }
-
-
-            visorIndice =
-                (
-                    visorIndice +
-                    1
-                ) %
-                visorFotos.length;
-
-
-            actualizarVisor();
-        }
-    );
+function abrirVisorPorId(id,indice=0){
+    const p=peluches.find(x=>x.id===id);if(!p)return;
+    visorFotos=obtenerFotos(p);visorIndice=Math.max(0,Math.min(indice,visorFotos.length-1));actualizarVisor();
+    document.getElementById("visorImagen")?.classList.add("abierto");
 }
-
-
-// ============================================================
-// CERRAR VISOR
-// ============================================================
-
-function cerrarVisor() {
-
-    const visor =
-        document.getElementById(
-            "visorImagen"
-        );
-
-
-    if (visor) {
-
-        visor.classList.remove(
-            "abierto"
-        );
+function actualizarVisor(){
+    document.getElementById("imagenGrande").src=visorFotos[visorIndice]||"";
+    document.getElementById("contadorImagenes").textContent=visorFotos.length>1?`${visorIndice+1} / ${visorFotos.length}`:"";
+}
+function cambiarVisor(direccion){
+    if(visorFotos.length<2)return;
+    visorIndice=(visorIndice+direccion+visorFotos.length)%visorFotos.length;actualizarVisor();
+}
+function cerrarVisor(){document.getElementById("visorImagen")?.classList.remove("abierto")}
+document.getElementById("imagenAnterior")?.addEventListener("click",e=>{e.stopPropagation();cambiarVisor(-1)});
+document.getElementById("imagenSiguiente")?.addEventListener("click",e=>{e.stopPropagation();cambiarVisor(1)});
+document.getElementById("cerrarVisor")?.addEventListener("click",cerrarVisor);
+document.getElementById("visorImagen")?.addEventListener("click",e=>{if(e.target.id==="visorImagen")cerrarVisor()});
+document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){cerrarVisor();cerrarScanner();cerrarMovimiento()}
+    if(document.getElementById("visorImagen")?.classList.contains("abierto")){
+        if(e.key==="ArrowLeft")cambiarVisor(-1);if(e.key==="ArrowRight")cambiarVisor(1)
     }
-}
-
-
-const cerrarVisorBoton =
-    document.getElementById(
-        "cerrarVisor"
-    );
-
-
-if (cerrarVisorBoton) {
-
-    cerrarVisorBoton.addEventListener(
-        "click",
-        cerrarVisor
-    );
-}
-
-
-const visor =
-    document.getElementById(
-        "visorImagen"
-    );
-
-
-if (visor) {
-
-    visor.addEventListener(
-        "click",
-        e => {
-
-            if (
-                e.target.id ===
-                "visorImagen"
-            ) {
-
-                cerrarVisor();
-            }
-        }
-    );
-}
-
-
-// ============================================================
-// TECLADO
-// ============================================================
-
-document.addEventListener(
-    "keydown",
-    e => {
-
-        const visorActual =
-            document.getElementById(
-                "visorImagen"
-            );
-
-
-        const visorAbierto =
-            visorActual &&
-            visorActual.classList.contains(
-                "abierto"
-            );
-
-
-        if (!visorAbierto) {
-            return;
-        }
-
-
-        if (
-            e.key ===
-            "Escape"
-        ) {
-
-            cerrarVisor();
-
-            return;
-        }
-
-
-        if (
-            e.key ===
-            "ArrowLeft"
-        ) {
-
-            if (
-                visorFotos.length < 2
-            ) {
-                return;
-            }
-
-
-            visorIndice =
-                (
-                    visorIndice -
-                    1 +
-                    visorFotos.length
-                ) %
-                visorFotos.length;
-
-
-            actualizarVisor();
-        }
-
-
-        if (
-            e.key ===
-            "ArrowRight"
-        ) {
-
-            if (
-                visorFotos.length < 2
-            ) {
-                return;
-            }
-
-
-            visorIndice =
-                (
-                    visorIndice +
-                    1
-                ) %
-                visorFotos.length;
-
-
-            actualizarVisor();
-        }
-    }
-);
-
-
-// ============================================================
-// FORMULARIO COLAPSABLE
-// ============================================================
-
-const toggleFormulario =
-    document.getElementById(
-        "toggleFormulario"
-    );
-
-
-const formularioPanel =
-    document.querySelector(
-        ".formulario-panel"
-    );
-
-
-if (
-    toggleFormulario &&
-    formularioPanel
-) {
-
-    toggleFormulario.addEventListener(
-        "click",
-        () => {
-
-            const colapsado =
-                formularioPanel.classList.toggle(
-                    "collapsado"
-                );
-
-
-            toggleFormulario.setAttribute(
-                "aria-expanded",
-                String(!colapsado)
-            );
-
-
-            const flecha =
-                document.getElementById(
-                    "flechaFormulario"
-                );
-
-
-            if (flecha) {
-
-                flecha.textContent =
-                    colapsado
-                        ? "⌄"
-                        : "⌃";
-            }
-        }
-    );
-}
-
-
-// ============================================================
-// FUNCIONES DISPONIBLES PARA LOS BOTONES
-// ============================================================
-
-window.editarPeluche =
-    editarPeluche;
-
-
-window.eliminarPeluche =
-    eliminarPeluche;
-
-window.pasarAlLocal =
-    pasarAlLocal;
-
-
-window.cambiarFotoTarjeta =
-    cambiarFotoTarjeta;
-
-
-window.abrirVisorPorId =
-    abrirVisorPorId;
-
-
-// ============================================================
-// INICIAR
-// ============================================================
+});
+
+window.editarPeluche=editarPeluche;
+window.eliminarPeluche=eliminarPeluche;
+window.abrirMovimiento=abrirMovimiento;
+window.cambiarFotoTarjeta=cambiarFotoTarjeta;
+window.abrirVisorPorId=abrirVisorPorId;
 
 cargarPeluches();
