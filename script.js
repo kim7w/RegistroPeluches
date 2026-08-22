@@ -74,6 +74,40 @@ function numeroSeguro(valor) {
     return Number.isFinite(numero) ? numero : 0;
 }
 
+// Convierte los errores de Firebase/Firestore en mensajes útiles
+// para saber exactamente por qué no se pudo guardar.
+function describirError(error) {
+    const codigo = error?.code || "sin-codigo";
+    const mensajeOriginal = error?.message || String(error) || "Error desconocido";
+
+    const mensajes = {
+        "permission-denied":
+            "Firebase rechazó la escritura por permisos. Revisa las reglas de Firestore de la colección 'peluches'.",
+        "unauthenticated":
+            "Firebase requiere autenticación para guardar este producto.",
+        "failed-precondition":
+            "Firebase indica una condición previa pendiente. Revisa la configuración de Firestore.",
+        "unavailable":
+            "Firebase no está disponible en este momento. Comprueba tu conexión a Internet e inténtalo nuevamente.",
+        "deadline-exceeded":
+            "Firebase tardó demasiado en responder. Comprueba tu conexión e inténtalo nuevamente.",
+        "network-request-failed":
+            "Falló la conexión de red. Comprueba que tengas Internet.",
+        "invalid-argument":
+            "Firebase recibió datos no válidos. Revisa los campos del producto.",
+        "not-found":
+            "Firebase no encontró el documento que se intenta actualizar.",
+        "already-exists":
+            "El registro ya existe.",
+        "resource-exhausted":
+            "Se alcanzó un límite de Firebase. Inténtalo nuevamente más tarde."
+    };
+
+    const explicacion = mensajes[codigo] || mensajeOriginal;
+
+    return `Código: ${codigo}\n${explicacion}\n\nDetalle técnico: ${mensajeOriginal}`;
+}
+
 function obtenerFotos(p) {
     const fotos = Array.isArray(p.fotos)
         ? p.fotos.filter(Boolean)
@@ -829,9 +863,9 @@ async function guardarFormulario(e) {
     } catch (error) {
         console.error("Error guardando producto:", error);
 
-        alert(
-            "No se pudo guardar el producto. Revisa tu conexión e inténtalo de nuevo."
-        );
+        // Ya no mostramos un mensaje genérico: aquí se indica el error real.
+        const detalle = describirError(error);
+        alert(`❌ No se pudo guardar el producto.\n\n${detalle}`);
 
     } finally {
         if (btnGuardar) {
