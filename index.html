@@ -17,7 +17,7 @@
         <div class="encabezado-icono">🧸</div>
         <div class="encabezado-texto">
             <h1>Registro de Peluches</h1>
-            <p>Inventario rápido: escanea, busca y controla entradas y salidas.</p>
+            <p>Inventario rápido: Local, Bodega, entradas, salidas y traslados.</p>
         </div>
     </header>
 
@@ -89,8 +89,12 @@
                     <input type="text" id="medida" placeholder="Ej. 30 cm, grande...">
                 </label>
 
-                <label>📦 Cantidad actual
-                    <input type="number" id="cantidad" placeholder="Ej. 5" min="0" step="1" required>
+                <label>🏪 Cantidad en local
+                    <input type="number" id="cantidadLocal" placeholder="Ej. 3" min="0" step="1" value="0" required>
+                </label>
+
+                <label>📦 Cantidad en bodega
+                    <input type="number" id="cantidadBodega" placeholder="Ej. 5" min="0" step="1" value="0" required>
                 </label>
 
                 <label>⚠️ Avisar cuando queden
@@ -152,7 +156,19 @@
             <div><h2 id="movimientoTitulo">📦 Movimiento</h2><p id="movimientoProducto">Producto</p></div>
             <button type="button" class="modal-close" id="cerrarMovimiento">×</button>
         </div>
-        <div class="cantidad-actual"><span>Existencia actual</span><strong id="movimientoActual">0</strong></div>
+        <div class="cantidad-resumen-mov">
+            <div><span>🏪 Local</span><strong id="movimientoLocal">0</strong></div>
+            <div><span>📦 Bodega</span><strong id="movimientoBodega">0</strong></div>
+            <div><span>📊 Total</span><strong id="movimientoTotal">0</strong></div>
+        </div>
+        <div id="movimientoDestinoWrap">
+            <label id="movimientoDestinoLabel">Destino
+                <select id="movimientoDestino">
+                    <option value="local">🏪 Local</option>
+                    <option value="bodega">📦 Bodega</option>
+                </select>
+            </label>
+        </div>
         <label>Cantidad
             <input type="number" id="movimientoCantidad" min="1" step="1" value="1" inputmode="numeric">
         </label>
