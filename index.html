@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#8b5cf6">
     <title>Registro de Peluches</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,43 +15,30 @@
 
     <header class="encabezado">
         <div class="encabezado-icono">🧸</div>
-        <div>
+        <div class="encabezado-texto">
             <h1>Registro de Peluches</h1>
+            <p>Inventario rápido: escanea, busca y controla entradas y salidas.</p>
         </div>
     </header>
 
     <section class="resumen" aria-label="Resumen del inventario">
-        <div class="estadistica">
-            <span class="estadistica-icono">🧸</span>
-            <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">🏪</span>
-            <div><strong id="totalLocal">0</strong><small>En local</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">📦</span>
-            <div><strong id="totalBodega">0</strong><small>En bodega</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">📊</span>
-            <div><strong id="totalUnidades">0</strong><small>Unidades totales</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">✨</span>
-            <div><strong id="totalDisponibles">0</strong><small>Disponibles</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">🏷️</span>
-            <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
-        </div>
+        <div class="estadistica"><span class="estadistica-icono">🧸</span><div><strong id="totalPeluche">0</strong><small>Productos</small></div></div>
+        <div class="estadistica"><span class="estadistica-icono">📊</span><div><strong id="totalUnidades">0</strong><small>Unidades</small></div></div>
+        <div class="estadistica"><span class="estadistica-icono">✨</span><div><strong id="totalDisponibles">0</strong><small>Con existencia</small></div></div>
+        <div class="estadistica alerta"><span class="estadistica-icono">⚠️</span><div><strong id="totalBajo">0</strong><small>Poco inventario</small></div></div>
+        <div class="estadistica agotada"><span class="estadistica-icono">❌</span><div><strong id="totalAgotados">0</strong><small>Agotados</small></div></div>
+    </section>
+
+    <section class="acciones-rapidas">
+        <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código</button>
+        <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo producto</button>
     </section>
 
     <section class="panel-busqueda">
         <div class="buscador-wrap">
             <span class="buscador-icono">🔎</span>
             <input type="search" id="buscar" autocomplete="off"
-                   placeholder="Busca por nombre, código, color, tamaño, etiqueta..." />
+                   placeholder="Busca por código, nombre o precio..." />
             <button type="button" id="limpiarBusqueda" class="btn-limpiar" aria-label="Limpiar búsqueda">×</button>
         </div>
 
@@ -60,77 +47,123 @@
             <button type="button" class="filtro" data-filtro="grande">📏 Grandes</button>
             <button type="button" class="filtro" data-filtro="mediano">📐 Medianos</button>
             <button type="button" class="filtro" data-filtro="pequeno">🤏 Pequeños</button>
-            <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles en local</button>
-            <button type="button" class="filtro" data-filtro="bodega">📦 Solo bodega</button>
-            <button type="button" class="filtro" data-filtro="local">🏪 En local</button>
+            <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles</button>
+            <button type="button" class="filtro" data-filtro="bajo">⚠️ Poco inventario</button>
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
         </div>
 
         <div class="resultado-info">
-            <h2 id="contador">Peluches registrados: 0</h2>
+            <h2 id="contador">Productos registrados: 0</h2>
             <span id="filtroActual">Mostrando todos</span>
         </div>
     </section>
 
-    <section class="formulario-panel">
-        <button type="button" class="formulario-toggle" id="toggleFormulario" aria-expanded="true">
-            <span>➕ Agregar / editar peluche</span>
-            <span id="flechaFormulario">⌃</span>
+    <section class="formulario-panel" id="formularioPanel">
+        <button type="button" class="formulario-toggle" id="toggleFormulario" aria-expanded="false">
+            <span>➕ Agregar / editar producto</span>
+            <span id="flechaFormulario">⌄</span>
         </button>
 
-        <form id="formulario">
+        <form id="formulario" hidden>
             <div class="form-grid">
-                <label>Código
-                    <input type="text" id="codigo" placeholder="Ej. OS-001" required>
+                <label>Código / código de barras
+                    <div class="campo-codigo">
+                        <input type="text" id="codigo" placeholder="Ej. 7501234567890" required>
+                        <button type="button" id="btnEscanearFormulario" title="Escanear">📷</button>
+                    </div>
                 </label>
+
                 <label>Nombre
-                    <input type="text" id="nombre" placeholder="Ej. Osito café" required>
+                    <input type="text" id="nombre" placeholder="Ej. Stitch" required>
                 </label>
+
                 <label>Precio
                     <input type="number" id="precio" placeholder="Ej. 150" min="0" step="0.01" required>
                 </label>
+
                 <label>Etiqueta / categoría
-                    <input type="text" id="etiqueta" placeholder="Ej. Oso, rosa, animal...">
+                    <input type="text" id="etiqueta" placeholder="Ej. Disney, rosa, oso...">
                 </label>
+
                 <label>Medida
                     <input type="text" id="medida" placeholder="Ej. 30 cm, grande...">
                 </label>
-                <label>🏪 Cantidad en local
-                    <input type="number" id="cantidadLocal" placeholder="Ej. 2" min="0" step="1">
+
+                <label>📦 Cantidad actual
+                    <input type="number" id="cantidad" placeholder="Ej. 5" min="0" step="1" required>
                 </label>
-                <label>📦 Cantidad en bodega
-                    <input type="number" id="cantidadBodega" placeholder="Ej. 5" min="0" step="1">
+
+                <label>⚠️ Avisar cuando queden
+                    <input type="number" id="minimo" placeholder="Ej. 2" min="0" step="1" value="2">
                 </label>
+
                 <label>📅 Fecha de ingreso
                     <input type="date" id="fechaIngreso">
                 </label>
+
                 <label class="campo-fotos">🖼️ Fotos
                     <input type="file" id="foto" accept="image/*" multiple>
-                    <small>Puedes seleccionar varias fotos. La primera será la principal.</small>
+                    <small>Puedes seleccionar varias. La primera será la principal.</small>
                 </label>
             </div>
 
             <div id="galeriaPrevia" class="galeria-previa"></div>
 
             <label>Observaciones
-                <textarea id="observaciones" rows="3" placeholder="Color, detalles, ubicación, etc."></textarea>
+                <textarea id="observaciones" rows="3" placeholder="Color, detalles, características, etc."></textarea>
             </label>
 
             <div class="form-botones">
-                <button type="submit" id="btnGuardar">💾 Guardar peluche</button>
+                <button type="submit" id="btnGuardar">💾 Guardar producto</button>
                 <button type="button" id="btnCancelar" class="btn-cancelar" style="display:none;">❌ Cancelar edición</button>
             </div>
         </form>
     </section>
 
     <div id="lista" aria-live="polite"></div>
+
     <div id="sinResultados" class="sin-resultados" style="display:none;">
         <div>🧸</div>
-        <h3>No encontramos peluches</h3>
-        <p>Prueba con otra palabra o cambia el filtro.</p>
+        <h3>No encontramos productos</h3>
+        <p>Prueba con otra palabra, código, precio o cambia el filtro.</p>
     </div>
 </div>
 
+<!-- Lector de códigos -->
+<div id="scannerModal" class="modal" role="dialog" aria-modal="true" aria-label="Lector de código">
+    <div class="modal-card scanner-card">
+        <div class="modal-header">
+            <div><h2>📷 Escanear código</h2><p>Apunta la cámara al código de barras.</p></div>
+            <button type="button" class="modal-close" id="cerrarScanner">×</button>
+        </div>
+        <div id="reader"></div>
+        <div id="scannerEstado" class="scanner-estado">Preparando cámara...</div>
+        <div class="scanner-manual">
+            <input type="text" id="codigoManual" inputmode="numeric" placeholder="O escribe el código aquí">
+            <button type="button" id="btnCodigoManual">Buscar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Entrada / salida -->
+<div id="movimientoModal" class="modal" role="dialog" aria-modal="true" aria-label="Movimiento de inventario">
+    <div class="modal-card movimiento-card">
+        <div class="modal-header">
+            <div><h2 id="movimientoTitulo">📦 Movimiento</h2><p id="movimientoProducto">Producto</p></div>
+            <button type="button" class="modal-close" id="cerrarMovimiento">×</button>
+        </div>
+        <div class="cantidad-actual"><span>Existencia actual</span><strong id="movimientoActual">0</strong></div>
+        <label>Cantidad
+            <input type="number" id="movimientoCantidad" min="1" step="1" value="1" inputmode="numeric">
+        </label>
+        <div class="movimiento-botones">
+            <button type="button" id="btnConfirmarMovimiento">Confirmar</button>
+            <button type="button" id="btnCancelarMovimiento" class="btn-cancelar">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Visor de fotos -->
 <div id="visorImagen" class="visor" role="dialog" aria-modal="true" aria-label="Vista de imagen">
     <button id="cerrarVisor" class="cerrar-visor" aria-label="Cerrar">×</button>
     <button id="imagenAnterior" class="flecha-visor izquierda" aria-label="Imagen anterior">‹</button>
@@ -139,6 +172,7 @@
     <div id="contadorImagenes" class="contador-imagenes"></div>
 </div>
 
+<script src="https://unpkg.com/html5-qrcode" defer></script>
 <script type="module" src="script.js"></script>
 </body>
 </html>
