@@ -17,7 +17,7 @@
         <div class="encabezado-icono">🧸</div>
         <div class="encabezado-texto">
             <h1>Registro de Peluches</h1>
-            
+            <p>Inventario rápido: Local, Bodega, entradas, salidas y traslados.</p>
         </div>
     </header>
 
@@ -66,9 +66,9 @@
 
         <form id="formulario" hidden>
             <div class="form-grid">
-                <label>Código / código de barras
+                <label>💰 Código / costo
                     <div class="campo-codigo">
-                        <input type="text" id="codigo" placeholder="Ej. 7501234567890" required>
+                        <input type="text" id="codigo" placeholder="Ej. #1KOFWB" required>
                         <button type="button" id="btnEscanearFormulario" title="Escanear">📷</button>
                     </div>
                 </label>
@@ -81,13 +81,10 @@
                     <input type="number" id="precio" placeholder="Ej. 150" min="0" step="0.01" required>
                 </label>
 
-                <label>Etiqueta / categoría
-                    <input type="text" id="etiqueta" inputmode="numeric" placeholder="Ej. Disney, rosa, oso...">
+                <label>🏷️ Etiqueta / código de barras
+                    <input type="text" id="etiqueta" inputmode="numeric" placeholder="Ej. 7501234567890">
                 </label>
 
-                <label>Medida
-                    <input type="text" id="medida" placeholder="Ej. 30 cm, grande...">
-                </label>
 
                 <label>🏪 Cantidad en local
                     <input type="number" id="cantidadLocal" placeholder="Ej. 3" min="0" step="1" value="0" required>
@@ -97,25 +94,36 @@
                     <input type="number" id="cantidadBodega" placeholder="Ej. 5" min="0" step="1" value="0" required>
                 </label>
 
+
+
+            </div>
+            <details class="opciones-extra">
+                <summary>⚙️ Más opciones</summary>
+                <div class="form-grid form-grid-extra">
+                <label>Medida
+                    <input type="text" id="medida" placeholder="Ej. 30 cm, grande...">
+                </label>
                 <label>⚠️ Avisar cuando queden
                     <input type="number" id="minimo" placeholder="Ej. 2" min="0" step="1" value="2">
                 </label>
-
                 <label>📅 Fecha de ingreso
                     <input type="date" id="fechaIngreso">
                 </label>
-
                 <label class="campo-fotos">🖼️ Fotos
                     <input type="file" id="foto" accept="image/*" multiple>
                     <small>Puedes seleccionar varias. La primera será la principal.</small>
                 </label>
-            </div>
+                </div>
+            </details>
 
             <div id="galeriaPrevia" class="galeria-previa"></div>
 
-            <label>Observaciones
-                <textarea id="observaciones" rows="3" placeholder="Color, detalles, características, etc."></textarea>
-            </label>
+            <details class="opciones-extra observaciones-extra">
+                <summary>💬 Observaciones</summary>
+                <label>
+                    <textarea id="observaciones" rows="2" placeholder="Color, detalles, características, etc."></textarea>
+                </label>
+            </details>
 
             <div class="form-botones">
                 <button type="submit" id="btnGuardar">💾 Guardar producto</button>
