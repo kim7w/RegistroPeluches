@@ -855,3 +855,40 @@ label textarea:focus {
         height: 340px;
     }
 }
+
+
+/* ============================================================
+   INVENTARIO POR UBICACIÓN
+   ============================================================ */
+
+.badge-estado.solo-bodega {
+    background: rgba(234, 179, 8, .94);
+    color: #422006;
+}
+
+.dato-local {
+    border-left: 3px solid #22c55e;
+}
+
+.dato-bodega {
+    border-left: 3px solid #f59e0b;
+}
+
+.botones {
+    flex-wrap: wrap;
+}
+
+.botones .btn-mover {
+    flex-basis: 100%;
+    background: #16a34a;
+}
+
+.botones .btn-mover:hover {
+    filter: brightness(.95);
+}
+
+@media (max-width: 700px) {
+    .botones .btn-mover {
+        flex-basis: auto;
+    }
+}
