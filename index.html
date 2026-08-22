@@ -17,6 +17,7 @@
         <div class="encabezado-icono">🧸</div>
         <div class="encabezado-texto">
             <h1>Registro de Peluches</h1>
+            
         </div>
     </header>
 
@@ -66,10 +67,7 @@
         <form id="formulario" hidden>
             <div class="form-grid">
                 <label>💰 Código / costo
-                    <div class="campo-codigo">
-                        <input type="text" id="codigo" placeholder="Ej. #1KOFWB" required>
-                        <button type="button" id="btnEscanearFormulario" title="Escanear">📷</button>
-                    </div>
+                    <input type="text" id="codigo" placeholder="Ej. #1KOFWB" required>
                 </label>
 
                 <label>Nombre
@@ -81,7 +79,10 @@
                 </label>
 
                 <label>🏷️ Etiqueta / código de barras
-                    <input type="text" id="etiqueta" inputmode="numeric" placeholder="Ej. 7501234567890">
+                    <div class="campo-codigo">
+                        <input type="text" id="etiqueta" inputmode="numeric" placeholder="Ej. 7501234567890">
+                        <button type="button" id="btnEscanearFormulario" title="Escanear código de barras">📷</button>
+                    </div>
                 </label>
 
 
