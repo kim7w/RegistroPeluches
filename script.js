@@ -43,6 +43,8 @@ const btnGuardar = document.getElementById("btnGuardar");
 const btnCancelar = document.getElementById("btnCancelar");
 const limpiarBusqueda = document.getElementById("limpiarBusqueda");
 const sinResultados = document.getElementById("sinResultados");
+const cantidadLocalInput = document.getElementById("cantidadLocal");
+const cantidadBodegaInput = document.getElementById("cantidadBodega");
 
 let peluches = [];
 let editando = null;
@@ -124,13 +126,32 @@ function clasificarTamano(tamano = "") {
 }
 
 
+function obtenerCantidadLocal(p) {
+    // Compatibilidad: los registros antiguos tenían "cantidad".
+    return Math.max(
+        0,
+        Number(p.cantidadLocal ?? p.cantidad ?? 0) || 0
+    );
+}
+
+function obtenerCantidadBodega(p) {
+    return Math.max(
+        0,
+        Number(p.cantidadBodega ?? 0) || 0
+    );
+}
+
+function obtenerCantidadTotal(p) {
+    return obtenerCantidadLocal(p) + obtenerCantidadBodega(p);
+}
+
 function estadoPeluche(p) {
+    const local = obtenerCantidadLocal(p);
+    const bodega = obtenerCantidadBodega(p);
 
-    const cantidad = Number(p.cantidad ?? 0);
-
-    return cantidad <= 0
-        ? "Agotado"
-        : (p.estado || "Disponible");
+    if (local > 0) return "Disponible";
+    if (bodega > 0) return "Solo en bodega";
+    return "Agotado";
 }
 
 
@@ -139,54 +160,39 @@ function estadoPeluche(p) {
 // ============================================================
 
 function actualizarResumen() {
-
     const total = peluches.length;
 
-    const unidades = peluches.reduce(
-        (s, p) =>
-            s + Math.max(0, Number(p.cantidad) || 0),
-        0
+    const local = peluches.reduce(
+        (s, p) => s + obtenerCantidadLocal(p), 0
     );
 
-    const disponibles =
-        peluches.filter(
-            p => estadoPeluche(p) !== "Agotado"
-        ).length;
+    const bodega = peluches.reduce(
+        (s, p) => s + obtenerCantidadBodega(p), 0
+    );
 
-    const agotados =
-        peluches.filter(
-            p => estadoPeluche(p) === "Agotado"
-        ).length;
+    const unidades = local + bodega;
 
+    const disponibles = peluches.filter(
+        p => obtenerCantidadLocal(p) > 0
+    ).length;
 
-    const totalPeluche =
-        document.getElementById("totalPeluche");
+    const agotados = peluches.filter(
+        p => estadoPeluche(p) === "Agotado"
+    ).length;
 
-    const totalUnidades =
-        document.getElementById("totalUnidades");
+    const refs = {
+        totalPeluche: total,
+        totalLocal: local,
+        totalBodega: bodega,
+        totalUnidades: unidades,
+        totalDisponibles: disponibles,
+        totalAgotados: agotados
+    };
 
-    const totalDisponibles =
-        document.getElementById("totalDisponibles");
-
-    const totalAgotados =
-        document.getElementById("totalAgotados");
-
-
-    if (totalPeluche) {
-        totalPeluche.textContent = total;
-    }
-
-    if (totalUnidades) {
-        totalUnidades.textContent = unidades;
-    }
-
-    if (totalDisponibles) {
-        totalDisponibles.textContent = disponibles;
-    }
-
-    if (totalAgotados) {
-        totalAgotados.textContent = agotados;
-    }
+    Object.entries(refs).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    });
 }
 
 
@@ -201,7 +207,16 @@ function coincideFiltro(p) {
     }
 
     if (filtroActivo === "disponible") {
-        return estadoPeluche(p) !== "Agotado";
+        return obtenerCantidadLocal(p) > 0;
+    }
+
+    if (filtroActivo === "bodega") {
+        return obtenerCantidadLocal(p) === 0 &&
+               obtenerCantidadBodega(p) > 0;
+    }
+
+    if (filtroActivo === "local") {
+        return obtenerCantidadLocal(p) > 0;
     }
 
     if (filtroActivo === "agotado") {
@@ -226,6 +241,9 @@ function coincideBusqueda(p, texto) {
         p.observaciones,
         p.precio,
         p.cantidad,
+        obtenerCantidadLocal(p),
+        obtenerCantidadBodega(p),
+        obtenerCantidadTotal(p),
         p.fechaIngreso,
         p.estado
     ];
@@ -316,203 +334,119 @@ function actualizarInterfazBusqueda() {
 // ============================================================
 
 function crearTarjeta(p) {
-
     const fotos = obtenerFotos(p);
-
     const principal = fotos[0] || "";
 
-    const agotado =
-        estadoPeluche(p) === "Agotado";
+    const local = obtenerCantidadLocal(p);
+    const bodega = obtenerCantidadBodega(p);
+    const total = obtenerCantidadTotal(p);
 
-    const estado =
-        agotado
-            ? "Agotado"
-            : "Disponible";
+    const estado = estadoPeluche(p);
+    const agotado = estado === "Agotado";
+    const soloBodega = estado === "Solo en bodega";
 
+    const miniaturas = fotos.length > 1 ? `
+        <div class="miniaturas">
+            ${fotos.map((url, i) => `
+                <img
+                    src="${escaparHTML(url)}"
+                    alt="Foto ${i + 1} de ${escaparHTML(p.nombre || "peluche")}"
+                    class="${i === 0 ? "activa" : ""}"
+                    loading="lazy"
+                    onclick="cambiarFotoTarjeta(event, '${p.id}', ${i})"
+                >
+            `).join("")}
+        </div>
+    ` : "";
 
-    const miniaturas =
-        fotos.length > 1
+    const imagen = principal ? `
+        <img
+            id="foto-${p.id}"
+            src="${escaparHTML(principal)}"
+            alt="${escaparHTML(p.nombre || "Peluche")}"
+            loading="lazy"
+            onclick="abrirVisorPorId('${p.id}', 0)"
+        >
+    ` : `<div class="sin-foto">🧸</div>`;
 
-            ? `
-                <div class="miniaturas">
-
-                    ${fotos.map((url, i) => `
-
-                        <img
-                            src="${escaparHTML(url)}"
-                            alt="Foto ${i + 1} de ${escaparHTML(p.nombre || "peluche")}"
-                            class="${i === 0 ? "activa" : ""}"
-                            loading="lazy"
-                            onclick="cambiarFotoTarjeta(event, '${p.id}', ${i})"
-                        >
-
-                    `).join("")}
-
-                </div>
-            `
-
-            : "";
-
-
-    const imagen = principal
-
-        ? `
-            <img
-                id="foto-${p.id}"
-                src="${escaparHTML(principal)}"
-                alt="${escaparHTML(p.nombre || "Peluche")}"
-                loading="lazy"
-                onclick="abrirVisorPorId('${p.id}', 0)"
-            >
-        `
-
-        : `
-            <div class="sin-foto">
-                🧸
-            </div>
-        `;
-
+    const moverBoton = bodega > 0 ? `
+        <button type="button" class="btn-mover"
+            onclick="pasarAlLocal('${p.id}')">
+            🔄 Pasar al local
+        </button>
+    ` : "";
 
     return `
-
         <article class="tarjeta">
-
             <div class="imagen-principal">
-
                 ${imagen}
 
-                <span class="badge-estado ${agotado ? "agotado" : ""}">
-                    ${estado}
+                <span class="badge-estado ${agotado ? "agotado" : ""} ${soloBodega ? "solo-bodega" : ""}">
+                    ${soloBodega ? "📦 SOLO EN BODEGA" : estado}
                 </span>
 
                 <span class="cantidad-badge">
-                    📦 ${Number(p.cantidad) || 0}
+                    📊 ${total} total
                 </span>
-
             </div>
-
 
             ${miniaturas}
 
-
             <div class="info">
-
-                <h3>
-                    ${escaparHTML(
-                        p.nombre || "Sin nombre"
-                    )}
-                </h3>
-
+                <h3>${escaparHTML(p.nombre || "Sin nombre")}</h3>
 
                 <div class="etiquetas">
-
-                    ${
-                        p.etiqueta
-                            ? `
-                                <span class="etiqueta-chip">
-                                    🏷️ ${escaparHTML(p.etiqueta)}
-                                </span>
-                              `
-                            : ""
-                    }
-
-
-                    ${
-                        p.tamano
-                            ? `
-                                <span class="etiqueta-chip">
-                                    📏 ${escaparHTML(p.tamano)}
-                                </span>
-                              `
-                            : ""
-                    }
-
+                    ${p.etiqueta ? `<span class="etiqueta-chip">🏷️ ${escaparHTML(p.etiqueta)}</span>` : ""}
+                    ${p.tamano ? `<span class="etiqueta-chip">📏 ${escaparHTML(p.tamano)}</span>` : ""}
                 </div>
 
-
-                <div class="precio">
-                    Q${escaparHTML(p.precio ?? "0")}
-                </div>
-
+                <div class="precio">Q${escaparHTML(p.precio ?? "0")}</div>
 
                 <div class="datos">
-
                     <div class="dato">
                         <small>CÓDIGO</small>
-                        <strong>
-                            ${escaparHTML(p.codigo || "—")}
-                        </strong>
+                        <strong>${escaparHTML(p.codigo || "—")}</strong>
                     </div>
 
+                    <div class="dato dato-local">
+                        <small>🏪 LOCAL</small>
+                        <strong>${local}</strong>
+                    </div>
+
+                    <div class="dato dato-bodega">
+                        <small>📦 BODEGA</small>
+                        <strong>${bodega}</strong>
+                    </div>
 
                     <div class="dato">
-                        <small>CANTIDAD</small>
-                        <strong>
-                            ${Number(p.cantidad) || 0}
-                        </strong>
+                        <small>📊 TOTAL</small>
+                        <strong>${total}</strong>
                     </div>
-
 
                     <div class="dato">
                         <small>FECHA</small>
-                        <strong>
-                            ${escaparHTML(
-                                p.fechaIngreso || "—"
-                            )}
-                        </strong>
+                        <strong>${escaparHTML(p.fechaIngreso || "—")}</strong>
                     </div>
-
 
                     <div class="dato">
                         <small>FOTOS</small>
-                        <strong>
-                            ${fotos.length}
-                        </strong>
+                        <strong>${fotos.length}</strong>
                     </div>
-
                 </div>
 
-
-                ${
-                    p.observaciones
-
-                        ? `
-                            <p class="observaciones">
-                                💬 ${escaparHTML(
-                                    p.observaciones
-                                )}
-                            </p>
-                          `
-
-                        : ""
-                }
-
+                ${p.observaciones ? `
+                    <p class="observaciones">💬 ${escaparHTML(p.observaciones)}</p>
+                ` : ""}
             </div>
-
 
             <div class="botones">
-
-                <button
-                    type="button"
-                    onclick="editarPeluche('${p.id}')"
-                >
-                    ✏️ Editar
-                </button>
-
-
-                <button
-                    type="button"
-                    onclick="eliminarPeluche('${p.id}')"
-                >
-                    🗑️ Eliminar
-                </button>
-
+                ${moverBoton}
+                <button type="button" onclick="editarPeluche('${p.id}')">✏️ Editar</button>
+                <button type="button" onclick="eliminarPeluche('${p.id}')">🗑️ Eliminar</button>
             </div>
-
         </article>
     `;
 }
-
 
 function mostrarPeluches(datos) {
 
@@ -932,10 +866,18 @@ if (formulario) {
                         .trim();
 
 
-                const cantidad =
+                const cantidadLocal =
                     document
-                        .getElementById("cantidad")
+                        .getElementById("cantidadLocal")
                         .value;
+
+                const cantidadBodega =
+                    document
+                        .getElementById("cantidadBodega")
+                        .value;
+
+                const local = Math.max(0, Number(cantidadLocal) || 0);
+                const bodega = Math.max(0, Number(cantidadBodega) || 0);
 
 
                 const observaciones =
@@ -1013,7 +955,10 @@ if (formulario) {
 
                     tamano,
 
-                    cantidad,
+                    cantidadLocal: local,
+                    cantidadBodega: bodega,
+                    // Compatibilidad con registros antiguos.
+                    cantidad: local,
 
                     observaciones,
 
@@ -1025,9 +970,9 @@ if (formulario) {
                     fechaIngreso,
 
                     estado:
-                        Number(cantidad) > 0
+                        local > 0
                             ? "Disponible"
-                            : "Agotado"
+                            : (bodega > 0 ? "Solo en bodega" : "Agotado")
                 };
 
 
@@ -1249,6 +1194,72 @@ document
 
 
 // ============================================================
+// MOVER DE BODEGA → LOCAL
+// ============================================================
+
+async function pasarAlLocal(id) {
+    const p = peluches.find(item => item.id === id);
+
+    if (!p) return;
+
+    const bodegaActual = obtenerCantidadBodega(p);
+
+    if (bodegaActual <= 0) {
+        alert("Este peluche no tiene unidades en bodega.");
+        return;
+    }
+
+    const respuesta = prompt(
+        `¿Cuántas unidades deseas pasar al local?\n\nEn bodega hay ${bodegaActual}.`,
+        "1"
+    );
+
+    if (respuesta === null) return;
+
+    const cantidadMover = Number(respuesta);
+
+    if (
+        !Number.isInteger(cantidadMover) ||
+        cantidadMover <= 0 ||
+        cantidadMover > bodegaActual
+    ) {
+        alert(`Ingresa un número entero entre 1 y ${bodegaActual}.`);
+        return;
+    }
+
+    const nuevoLocal = obtenerCantidadLocal(p) + cantidadMover;
+    const nuevaBodega = bodegaActual - cantidadMover;
+
+    try {
+        await updateDoc(
+            doc(db, "peluches", id),
+            {
+                cantidadLocal: nuevoLocal,
+                cantidadBodega: nuevaBodega,
+                cantidad: nuevoLocal,
+                estado: nuevoLocal > 0
+                    ? "Disponible"
+                    : (nuevaBodega > 0 ? "Solo en bodega" : "Agotado")
+            }
+        );
+
+        p.cantidadLocal = nuevoLocal;
+        p.cantidadBodega = nuevaBodega;
+        p.cantidad = nuevoLocal;
+        p.estado = nuevoLocal > 0
+            ? "Disponible"
+            : (nuevaBodega > 0 ? "Solo en bodega" : "Agotado");
+
+        actualizarResumen();
+        actualizarInterfazBusqueda();
+
+    } catch (error) {
+        console.error(error);
+        alert("No se pudo mover el inventario. Revisa tu conexión e inténtalo de nuevo.");
+    }
+}
+
+// ============================================================
 // ELIMINAR
 // ============================================================
 
@@ -1354,9 +1365,14 @@ async function editarPeluche(id) {
 
 
     document
-        .getElementById("cantidad")
+        .getElementById("cantidadLocal")
         .value =
-        peluche.cantidad || "";
+        obtenerCantidadLocal(peluche);
+
+    document
+        .getElementById("cantidadBodega")
+        .value =
+        obtenerCantidadBodega(peluche);
 
 
     document
@@ -1899,6 +1915,9 @@ window.editarPeluche =
 
 window.eliminarPeluche =
     eliminarPeluche;
+
+window.pasarAlLocal =
+    pasarAlLocal;
 
 
 window.cambiarFotoTarjeta =
