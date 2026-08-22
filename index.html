@@ -26,8 +26,16 @@
             <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
         </div>
         <div class="estadistica">
+            <span class="estadistica-icono">🏪</span>
+            <div><strong id="totalLocal">0</strong><small>En local</small></div>
+        </div>
+        <div class="estadistica">
             <span class="estadistica-icono">📦</span>
-            <div><strong id="totalUnidades">0</strong><small>Unidades</small></div>
+            <div><strong id="totalBodega">0</strong><small>En bodega</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">📊</span>
+            <div><strong id="totalUnidades">0</strong><small>Unidades totales</small></div>
         </div>
         <div class="estadistica">
             <span class="estadistica-icono">✨</span>
@@ -52,7 +60,9 @@
             <button type="button" class="filtro" data-filtro="grande">📏 Grandes</button>
             <button type="button" class="filtro" data-filtro="mediano">📐 Medianos</button>
             <button type="button" class="filtro" data-filtro="pequeno">🤏 Pequeños</button>
-            <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles</button>
+            <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles en local</button>
+            <button type="button" class="filtro" data-filtro="bodega">📦 Solo bodega</button>
+            <button type="button" class="filtro" data-filtro="local">🏪 En local</button>
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
         </div>
 
@@ -85,8 +95,11 @@
                 <label>Medida
                     <input type="text" id="medida" placeholder="Ej. 30 cm, grande...">
                 </label>
-                <label>Cantidad
-                    <input type="number" id="cantidad" placeholder="Ej. 5" min="0">
+                <label>🏪 Cantidad en local
+                    <input type="number" id="cantidadLocal" placeholder="Ej. 2" min="0" step="1">
+                </label>
+                <label>📦 Cantidad en bodega
+                    <input type="number" id="cantidadBodega" placeholder="Ej. 5" min="0" step="1">
                 </label>
                 <label>📅 Fecha de ingreso
                     <input type="date" id="fechaIngreso">
