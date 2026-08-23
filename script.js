@@ -778,9 +778,8 @@ async function guardarFormulario(e) {
                 : [];
         }
 
-        // El CÓDIGO corresponde al costo/código interno y puede repetirse
-        // entre varios productos. El que debe ser único es el código de barras
-        // guardado en ETIQUETA.
+        // El CÓDIGO/COSTO DE COMPRA puede repetirse entre productos.
+        // La ETIQUETA es el código de barras y sí debe ser única.
         const existentePorEtiqueta = etiqueta
             ? peluches.find(
                 p =>
@@ -791,7 +790,7 @@ async function guardarFormulario(e) {
 
         if (existentePorEtiqueta) {
             alert(
-                "Ese código de barras ya está registrado. Busca el producto existente o revisa la etiqueta."
+                "Ese código de barras (Etiqueta) ya está registrado. Usa otro código de barras."
             );
             return;
         }
@@ -1390,190 +1389,165 @@ document
     );
 
 async function abrirScanner() {
-    const modal =
-        document.getElementById(
-            "scannerModal"
-        );
-
-    const estado =
-        document.getElementById(
-            "scannerEstado"
-        );
+    const modal = document.getElementById("scannerModal");
+    const estado = document.getElementById("scannerEstado");
 
     modal?.classList.add("abierto");
-
-    if (estado) {
-        estado.textContent =
-            "Preparando cámara...";
-    }
+    if (estado) estado.textContent = "Preparando cámara...";
 
     try {
-        if (
-            typeof Html5Qrcode ===
-            "undefined"
-        ) {
+        if (typeof Html5Qrcode === "undefined") {
             if (estado) {
-                estado.textContent =
-                    "No se pudo cargar el lector. También puedes escribir el código abajo.";
+                estado.textContent = "No se pudo cargar el lector. Recarga la página e inténtalo de nuevo.";
             }
-
             return;
         }
 
         if (scannerActivo) return;
 
-        scanner =
-            new Html5Qrcode("reader");
+        const formatos = [];
+        const F = window.Html5QrcodeSupportedFormats;
+        if (F) {
+            [
+                "EAN_13", "EAN_8", "UPC_A", "UPC_E",
+                "CODE_128", "CODE_39", "CODE_93",
+                "ITF", "CODABAR", "RSS_14", "RSS_EXPANDED"
+            ].forEach(nombre => {
+                if (F[nombre] !== undefined) formatos.push(F[nombre]);
+            });
+        }
 
+        scanner = new Html5Qrcode("reader", {
+            verbose: false,
+            formatsToSupport: formatos.length ? formatos : undefined
+        });
         scannerActivo = true;
 
+        const ancho = Math.min(520, Math.max(280, Math.floor(window.innerWidth * 0.88)));
+
         await scanner.start(
+            { facingMode: { exact: "environment" } },
             {
-                facingMode:
-                    "environment"
-            },
-            {
-                fps: 10,
-                qrbox: {
-                    width: 280,
-                    height: 130
+                fps: 15,
+                qrbox: { width: ancho, height: 180 },
+                aspectRatio: 1.7777778,
+                disableFlip: true,
+                videoConstraints: {
+                    facingMode: { ideal: "environment" },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
                 }
             },
-            codigo =>
-                procesarCodigoEscaneado(
-                    codigo
-                ),
+            codigo => procesarCodigoEscaneado(codigo),
             () => {}
         );
 
         if (estado) {
-            estado.textContent =
-                "Cámara activa. Apunta al código de barras.";
+            estado.textContent = "Cámara activa. Coloca el código de barras completo dentro del recuadro.";
         }
-
     } catch (error) {
-        console.error(
-            "Error abriendo cámara:",
-            error
-        );
+        console.error("Error abriendo cámara:", error);
 
-        if (estado) {
-            estado.textContent =
-                "No se pudo abrir la cámara. Revisa el permiso del navegador o escribe el código.";
+        // Algunos teléfonos no aceptan { exact: environment }.
+        // Hacemos un segundo intento con la cámara trasera como preferida.
+        try {
+            if (scanner) {
+                try { await scanner.stop(); } catch (e) {}
+                try { await scanner.clear(); } catch (e) {}
+            }
+
+            scanner = new Html5Qrcode("reader");
+            scannerActivo = true;
+
+            await scanner.start(
+                { facingMode: "environment" },
+                {
+                    fps: 15,
+                    qrbox: { width: Math.min(520, Math.max(280, Math.floor(window.innerWidth * 0.88))), height: 180 },
+                    aspectRatio: 1.7777778,
+                    disableFlip: true,
+                    videoConstraints: {
+                        facingMode: "environment",
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                },
+                codigo => procesarCodigoEscaneado(codigo),
+                () => {}
+            );
+
+            if (estado) {
+                estado.textContent = "Cámara activa. Coloca el código de barras completo dentro del recuadro.";
+            }
+        } catch (error2) {
+            console.error("Segundo intento del lector:", error2);
+            if (estado) {
+                estado.textContent = "No se pudo iniciar el lector. Revisa el permiso de cámara o usa la entrada manual.";
+            }
+            scannerActivo = false;
+            scanner = null;
         }
-
-        scannerActivo = false;
-        scanner = null;
     }
 }
 
 async function cerrarScanner() {
-    const modal =
-        document.getElementById(
-            "scannerModal"
-        );
+    const modal = document.getElementById("scannerModal");
 
-    if (
-        scanner &&
-        scannerActivo
-    ) {
-        try {
-            await scanner.stop();
-        } catch (e) {}
-
-        try {
-            await scanner.clear();
-        } catch (e) {}
+    if (scanner && scannerActivo) {
+        try { await scanner.stop(); } catch (e) {}
+        try { await scanner.clear(); } catch (e) {}
     }
 
     scanner = null;
     scannerActivo = false;
-
     modal?.classList.remove("abierto");
 
-    const codigoManual =
-        document.getElementById(
-            "codigoManual"
-        );
+    const codigoManual = document.getElementById("codigoManual");
+    if (codigoManual) codigoManual.value = "";
+}
 
-    if (codigoManual) {
-        codigoManual.value = "";
-    }
+function normalizarCodigoBarras(valor = "") {
+    // Conserva ceros iniciales y elimina únicamente espacios accidentales.
+    return String(valor).replace(/\s+/g, "").trim();
 }
 
 function procesarCodigoEscaneado(codigo) {
-    const valor =
-        String(codigo).trim();
-
+    const valor = normalizarCodigoBarras(codigo);
     if (!valor) return;
 
     cerrarScanner();
 
-    // El código de barras pertenece al campo ETIQUETA.
-    // No debemos confundirlo con CÓDIGO (código interno/costo).
-    const encontrado =
-        peluches.find(
-            p =>
-                normalizar(p.etiqueta) ===
-                normalizar(valor)
-        );
+    // El código leído se compara ÚNICAMENTE con Etiqueta,
+    // porque Etiqueta es el código de barras físico.
+    const encontrado = peluches.find(
+        p => normalizarCodigoBarras(p.etiqueta) === valor
+    );
 
     if (encontrado) {
-        if (buscar) {
-            buscar.value = valor;
-        }
-
+        if (buscar) buscar.value = valor;
         filtroActivo = "todos";
 
-        document
-            .querySelectorAll(".filtro")
-            .forEach(
-                boton =>
-                    boton.classList.toggle(
-                        "activo",
-                        boton.dataset.filtro ===
-                            "todos"
-                    )
-            );
+        document.querySelectorAll(".filtro").forEach(boton => {
+            boton.classList.toggle("activo", boton.dataset.filtro === "todos");
+        });
 
         actualizarInterfazBusqueda();
 
-        setTimeout(
-            () =>
-                document
-                    .querySelector(
-                        ".tarjeta"
-                    )
-                    ?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center"
-                    }),
-            80
-        );
-
+        setTimeout(() => {
+            document.querySelector(".tarjeta")?.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        }, 80);
     } else {
         cancelarEdicion();
         abrirFormulario();
 
-        // Si el código de barras no existe, lo dejamos en ETIQUETA,
-        // porque ese campo es el que identifica el código de barras.
-        const etiquetaInput =
-            document.getElementById(
-                "etiqueta"
-            );
+        const etiquetaInput = document.getElementById("etiqueta");
+        if (etiquetaInput) etiquetaInput.value = valor;
 
-        if (etiquetaInput) {
-            etiquetaInput.value =
-                valor;
-        }
-
-        document
-            .getElementById("nombre")
-            ?.focus();
-
-        alert(
-            "Código no registrado. Completa los datos para crear el producto."
-        );
+        document.getElementById("nombre")?.focus();
+        alert("Código de barras no registrado. Se colocó automáticamente en Etiqueta.");
     }
 }
 
