@@ -778,15 +778,20 @@ async function guardarFormulario(e) {
                 : [];
         }
 
-        const existentePorCodigo = peluches.find(
-            p =>
-                normalizar(p.codigo) === normalizar(codigo) &&
-                p.id !== editando
-        );
+        // El CÓDIGO corresponde al costo/código interno y puede repetirse
+        // entre varios productos. El que debe ser único es el código de barras
+        // guardado en ETIQUETA.
+        const existentePorEtiqueta = etiqueta
+            ? peluches.find(
+                p =>
+                    normalizar(p.etiqueta) === normalizar(etiqueta) &&
+                    p.id !== editando
+            )
+            : null;
 
-        if (existentePorCodigo) {
+        if (existentePorEtiqueta) {
             alert(
-                "Ese código ya está registrado. Busca el producto existente o usa otro código."
+                "Ese código de barras ya está registrado. Busca el producto existente o revisa la etiqueta."
             );
             return;
         }
