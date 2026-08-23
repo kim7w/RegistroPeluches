@@ -1504,10 +1504,12 @@ function procesarCodigoEscaneado(codigo) {
 
     cerrarScanner();
 
+    // El código de barras pertenece al campo ETIQUETA.
+    // No debemos confundirlo con CÓDIGO (código interno/costo).
     const encontrado =
         peluches.find(
             p =>
-                normalizar(p.codigo) ===
+                normalizar(p.etiqueta) ===
                 normalizar(valor)
         );
 
@@ -1548,13 +1550,15 @@ function procesarCodigoEscaneado(codigo) {
         cancelarEdicion();
         abrirFormulario();
 
-        const codigoInput =
+        // Si el código de barras no existe, lo dejamos en ETIQUETA,
+        // porque ese campo es el que identifica el código de barras.
+        const etiquetaInput =
             document.getElementById(
-                "codigo"
+                "etiqueta"
             );
 
-        if (codigoInput) {
-            codigoInput.value =
+        if (etiquetaInput) {
+            etiquetaInput.value =
                 valor;
         }
 
