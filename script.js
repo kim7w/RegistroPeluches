@@ -49,6 +49,8 @@ let visorIndice = 0;
 
 let scanner = null;
 let scannerActivo = false;
+let ultimoCodigoDetectado = "";
+let repeticionesCodigoDetectado = 0;
 
 let movimientoId = null;
 let movimientoTipo = "entrada";
@@ -1398,100 +1400,137 @@ async function abrirScanner() {
     try {
         if (typeof Html5Qrcode === "undefined") {
             if (estado) {
-                estado.textContent = "No se pudo cargar el lector. Recarga la página e inténtalo de nuevo.";
+                estado.textContent =
+                    "No se pudo cargar el lector. Recarga la página e inténtalo de nuevo.";
             }
             return;
         }
 
         if (scannerActivo) return;
 
-        const formatos = [];
+        /*
+         * ESTAS ETIQUETAS SON CODE 128.
+         *
+         * Antes se habilitaban muchos formatos al mismo tiempo
+         * (EAN, UPC, CODE 39, CODE 93, ITF, etc.). En algunos
+         * teléfonos eso puede provocar una decodificación incorrecta.
+         *
+         * Aquí dejamos únicamente CODE 128, que es el formato de
+         * la etiqueta mostrada, por ejemplo: XY-25013.
+         */
         const F = window.Html5QrcodeSupportedFormats;
-        if (F) {
-            [
-                "EAN_13", "EAN_8", "UPC_A", "UPC_E",
-                "CODE_128", "CODE_39", "CODE_93",
-                "ITF", "CODABAR", "RSS_14", "RSS_EXPANDED"
-            ].forEach(nombre => {
-                if (F[nombre] !== undefined) formatos.push(F[nombre]);
-            });
-        }
+        const formatos = F?.CODE_128 !== undefined
+            ? [F.CODE_128]
+            : undefined;
+
+        const configuracionScanner = {
+            fps: 20,
+            qrbox: {
+                width: Math.min(
+                    560,
+                    Math.max(300, Math.floor(window.innerWidth * 0.90))
+                ),
+                height: 220
+            },
+            aspectRatio: 1.7777778,
+            disableFlip: false,
+            videoConstraints: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+
+            /*
+             * Si el navegador/teléfono dispone de BarcodeDetector,
+             * Html5Qrcode puede utilizarlo. Si no está disponible,
+             * continúa usando su lector interno.
+             */
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: true
+            }
+        };
 
         scanner = new Html5Qrcode("reader", {
             verbose: false,
-            formatsToSupport: formatos.length ? formatos : undefined
+            formatsToSupport: formatos
         });
+
         scannerActivo = true;
 
-        const ancho = Math.min(520, Math.max(280, Math.floor(window.innerWidth * 0.88)));
+        const recibirCodigo = codigo => {
+            procesarCodigoEscaneado(codigo);
+        };
 
-        await scanner.start(
-            { facingMode: { exact: "environment" } },
-            {
-                fps: 15,
-                qrbox: { width: ancho, height: 180 },
-                aspectRatio: 1.7777778,
-                disableFlip: true,
-                videoConstraints: {
-                    facingMode: { ideal: "environment" },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                }
-            },
-            codigo => procesarCodigoEscaneado(codigo),
-            () => {}
-        );
-
-        if (estado) {
-            estado.textContent = "Cámara activa. Coloca el código de barras completo dentro del recuadro.";
-        }
-    } catch (error) {
-        console.error("Error abriendo cámara:", error);
-
-        // Algunos teléfonos no aceptan { exact: environment }.
-        // Hacemos un segundo intento con la cámara trasera como preferida.
         try {
-            if (scanner) {
-                try { await scanner.stop(); } catch (e) {}
-                try { await scanner.clear(); } catch (e) {}
-            }
+            await scanner.start(
+                { facingMode: { exact: "environment" } },
+                configuracionScanner,
+                recibirCodigo,
+                () => {}
+            );
+        } catch (errorCamaraExacta) {
+            console.warn(
+                "No se pudo iniciar con cámara exacta. Se intentará con la cámara trasera:",
+                errorCamaraExacta
+            );
 
-            scanner = new Html5Qrcode("reader");
+            try {
+                await scanner.stop();
+            } catch (e) {}
+
+            try {
+                await scanner.clear();
+            } catch (e) {}
+
+            scanner = new Html5Qrcode("reader", {
+                verbose: false,
+                formatsToSupport: formatos
+            });
+
             scannerActivo = true;
 
             await scanner.start(
                 { facingMode: "environment" },
-                {
-                    fps: 15,
-                    qrbox: { width: Math.min(520, Math.max(280, Math.floor(window.innerWidth * 0.88))), height: 180 },
-                    aspectRatio: 1.7777778,
-                    disableFlip: true,
-                    videoConstraints: {
-                        facingMode: "environment",
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                },
-                codigo => procesarCodigoEscaneado(codigo),
+                configuracionScanner,
+                recibirCodigo,
                 () => {}
             );
+        }
 
-            if (estado) {
-                estado.textContent = "Cámara activa. Coloca el código de barras completo dentro del recuadro.";
+        if (estado) {
+            estado.textContent =
+                "Cámara activa. Coloca el código de barras completo dentro del recuadro.";
+        }
+    } catch (error) {
+        console.error("Error abriendo cámara:", error);
+
+        try {
+            if (scanner) {
+                try {
+                    await scanner.stop();
+                } catch (e) {}
+
+                try {
+                    await scanner.clear();
+                } catch (e) {}
             }
-        } catch (error2) {
-            console.error("Segundo intento del lector:", error2);
-            if (estado) {
-                estado.textContent = "No se pudo iniciar el lector. Revisa el permiso de cámara o usa la entrada manual.";
-            }
-            scannerActivo = false;
-            scanner = null;
+        } catch (e) {}
+
+        scannerActivo = false;
+        scanner = null;
+
+        if (estado) {
+            estado.textContent =
+                "No se pudo iniciar el lector. Revisa el permiso de cámara o usa la entrada manual.";
         }
     }
 }
 
 async function cerrarScanner() {
     const modal = document.getElementById("scannerModal");
+
+    ultimoCodigoDetectado = "";
+    repeticionesCodigoDetectado = 0;
 
     if (scanner && scannerActivo) {
         try { await scanner.stop(); } catch (e) {}
@@ -1507,20 +1546,66 @@ async function cerrarScanner() {
 }
 
 function normalizarCodigoBarras(valor = "") {
-    // Conserva ceros iniciales y elimina únicamente espacios accidentales.
-    return String(valor).replace(/\s+/g, "").trim();
+    /*
+     * Limpieza segura del resultado del lector.
+     *
+     * Algunos lectores pueden anteponer el identificador de
+     * simbología de Code 128, por ejemplo ]C0 o ]C1.
+     * Ese prefijo NO forma parte del código de la etiqueta.
+     */
+    let resultado = String(valor ?? "")
+        .replace(/[\r\n\t]+/g, "")
+        .trim();
+
+    resultado = resultado.replace(/^\]C[01]/i, "");
+
+    /*
+     * Conservamos letras, números, guiones y demás caracteres
+     * que realmente puedan formar parte del código.
+     * No eliminamos el guion de XY-25013.
+     */
+    return resultado;
 }
 
 function procesarCodigoEscaneado(codigo) {
     const valor = normalizarCodigoBarras(codigo);
+
     if (!valor) return;
+
+    /*
+     * No aceptamos una lectura instantánea aislada.
+     * Pedimos dos lecturas consecutivas iguales para reducir
+     * falsos positivos de la cámara.
+     */
+    if (valor !== ultimoCodigoDetectado) {
+        ultimoCodigoDetectado = valor;
+        repeticionesCodigoDetectado = 1;
+
+        const estado = document.getElementById("scannerEstado");
+        if (estado) {
+            estado.textContent =
+                `Código detectado: ${valor}. Confirmando lectura...`;
+        }
+
+        return;
+    }
+
+    repeticionesCodigoDetectado++;
+
+    if (repeticionesCodigoDetectado < 2) return;
+
+    ultimoCodigoDetectado = "";
+    repeticionesCodigoDetectado = 0;
 
     cerrarScanner();
 
-    // El código leído se compara ÚNICAMENTE con Etiqueta,
-    // porque Etiqueta es el código de barras físico.
+    /*
+     * El código leído se compara ÚNICAMENTE con Etiqueta,
+     * porque Etiqueta es el código de barras físico.
+     */
     const encontrado = peluches.find(
-        p => normalizarCodigoBarras(p.etiqueta) === valor
+        p =>
+            normalizarCodigoBarras(p.etiqueta) === valor
     );
 
     if (encontrado) {
@@ -1528,7 +1613,10 @@ function procesarCodigoEscaneado(codigo) {
         filtroActivo = "todos";
 
         document.querySelectorAll(".filtro").forEach(boton => {
-            boton.classList.toggle("activo", boton.dataset.filtro === "todos");
+            boton.classList.toggle(
+                "activo",
+                boton.dataset.filtro === "todos"
+            );
         });
 
         actualizarInterfazBusqueda();
@@ -1543,11 +1631,18 @@ function procesarCodigoEscaneado(codigo) {
         cancelarEdicion();
         abrirFormulario();
 
-        const etiquetaInput = document.getElementById("etiqueta");
-        if (etiquetaInput) etiquetaInput.value = valor;
+        const etiquetaInput =
+            document.getElementById("etiqueta");
+
+        if (etiquetaInput) {
+            etiquetaInput.value = valor;
+        }
 
         document.getElementById("nombre")?.focus();
-        alert("Código de barras no registrado. Se colocó automáticamente en Etiqueta.");
+
+        alert(
+            "Código de barras no registrado. Se colocó automáticamente en Etiqueta."
+        );
     }
 }
 
