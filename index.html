@@ -75,8 +75,12 @@
 
         <form id="formulario">
             <div class="form-grid">
-                <label>Código / costo de compra
-                    <input type="text" id="codigo" placeholder="Ej. 25 o C-025" required>
+                <label>Código interno / código del producto
+                    <div class="campo-barcode">
+                        <input type="text" id="codigo" placeholder="Ej. OS-001 o SIN-0001" required>
+                        <button type="button" id="btnCodigoInterno" class="btn-escanear-campo">➕ Sin código</button>
+                    </div>
+                    <small>Si el producto no trae código de barras, pulsa <strong>Sin código</strong> y se asignará uno automáticamente.</small>
                 </label>
                 <label>Nombre
                     <input type="text" id="nombre" placeholder="Ej. Osito café" required>
