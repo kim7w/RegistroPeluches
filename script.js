@@ -49,8 +49,13 @@ let visorIndice = 0;
 
 let scanner = null;
 let scannerActivo = false;
-let ultimoCodigoDetectado = "";
-let repeticionesCodigoDetectado = 0;
+
+// OCR para etiquetas que traen el código escrito como texto
+// (por ejemplo: >ZDB-P4107) y no un código de barras.
+let ocrWorker = null;
+let ocrLoopActivo = false;
+let ocrProcesando = false;
+let ocrScriptCargando = null;
 
 let movimientoId = null;
 let movimientoTipo = "entrada";
@@ -74,40 +79,6 @@ function escaparHTML(valor = "") {
 function numeroSeguro(valor) {
     const numero = Number(valor);
     return Number.isFinite(numero) ? numero : 0;
-}
-
-// Convierte los errores de Firebase/Firestore en mensajes útiles
-// para saber exactamente por qué no se pudo guardar.
-function describirError(error) {
-    const codigo = error?.code || "sin-codigo";
-    const mensajeOriginal = error?.message || String(error) || "Error desconocido";
-
-    const mensajes = {
-        "permission-denied":
-            "Firebase rechazó la escritura por permisos. Revisa las reglas de Firestore de la colección 'peluches'.",
-        "unauthenticated":
-            "Firebase requiere autenticación para guardar este producto.",
-        "failed-precondition":
-            "Firebase indica una condición previa pendiente. Revisa la configuración de Firestore.",
-        "unavailable":
-            "Firebase no está disponible en este momento. Comprueba tu conexión a Internet e inténtalo nuevamente.",
-        "deadline-exceeded":
-            "Firebase tardó demasiado en responder. Comprueba tu conexión e inténtalo nuevamente.",
-        "network-request-failed":
-            "Falló la conexión de red. Comprueba que tengas Internet.",
-        "invalid-argument":
-            "Firebase recibió datos no válidos. Revisa los campos del producto.",
-        "not-found":
-            "Firebase no encontró el documento que se intenta actualizar.",
-        "already-exists":
-            "El registro ya existe.",
-        "resource-exhausted":
-            "Se alcanzó un límite de Firebase. Inténtalo nuevamente más tarde."
-    };
-
-    const explicacion = mensajes[codigo] || mensajeOriginal;
-
-    return `Código: ${codigo}\n${explicacion}\n\nDetalle técnico: ${mensajeOriginal}`;
 }
 
 function obtenerFotos(p) {
@@ -780,19 +751,15 @@ async function guardarFormulario(e) {
                 : [];
         }
 
-        // El CÓDIGO/COSTO DE COMPRA puede repetirse entre productos.
-        // La ETIQUETA es el código de barras y sí debe ser única.
-        const existentePorEtiqueta = etiqueta
-            ? peluches.find(
-                p =>
-                    normalizar(p.etiqueta) === normalizar(etiqueta) &&
-                    p.id !== editando
-            )
-            : null;
+        const existentePorCodigo = peluches.find(
+            p =>
+                normalizar(p.codigo) === normalizar(codigo) &&
+                p.id !== editando
+        );
 
-        if (existentePorEtiqueta) {
+        if (existentePorCodigo) {
             alert(
-                "Ese código de barras (Etiqueta) ya está registrado. Usa otro código de barras."
+                "Ese código ya está registrado. Busca el producto existente o usa otro código."
             );
             return;
         }
@@ -869,9 +836,9 @@ async function guardarFormulario(e) {
     } catch (error) {
         console.error("Error guardando producto:", error);
 
-        // Ya no mostramos un mensaje genérico: aquí se indica el error real.
-        const detalle = describirError(error);
-        alert(`❌ No se pudo guardar el producto.\n\n${detalle}`);
+        alert(
+            "No se pudo guardar el producto. Revisa tu conexión e inténtalo de nuevo."
+        );
 
     } finally {
         if (btnGuardar) {
@@ -1390,274 +1357,394 @@ document
         }
     );
 
+async function cargarTesseract() {
+    if (window.Tesseract) return window.Tesseract;
+
+    if (ocrScriptCargando) {
+        return ocrScriptCargando;
+    }
+
+    ocrScriptCargando = new Promise((resolve, reject) => {
+        const existente = document.querySelector(
+            'script[data-tesseract="registro-peluches"]'
+        );
+
+        if (existente) {
+            existente.addEventListener("load", () => resolve(window.Tesseract), { once: true });
+            existente.addEventListener("error", reject, { once: true });
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+        script.async = true;
+        script.dataset.tesseract = "registro-peluches";
+        script.onload = () => resolve(window.Tesseract);
+        script.onerror = () => reject(new Error("No se pudo cargar el lector OCR."));
+        document.head.appendChild(script);
+    });
+
+    try {
+        return await ocrScriptCargando;
+    } finally {
+        ocrScriptCargando = null;
+    }
+}
+
+function normalizarCodigoOCR(valor = "") {
+    return String(valor)
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[\r\n]+/g, " ")
+        .replace(/[|]/g, "I")
+        .replace(/[—–−]/g, "-")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function equivalenciaCodigo(valor = "") {
+    return normalizarCodigoOCR(valor)
+        .replace(/^\s*[>›»]+\s*/, "")
+        .replace(/\s+/g, "")
+        .replace(/[._/\\]+/g, "-");
+}
+
+function buscarProductoPorCodigo(valor = "") {
+    const normal = equivalenciaCodigo(valor);
+    if (!normal) return null;
+
+    return peluches.find(p => {
+        const codigo = equivalenciaCodigo(p.codigo || "");
+        const etiqueta = equivalenciaCodigo(p.etiqueta || "");
+        return codigo === normal || etiqueta === normal;
+    }) || null;
+}
+
+function extraerCodigoDesdeOCR(texto = "") {
+    const textoLimpio = normalizarCodigoOCR(texto);
+
+    // Primero intentamos encontrar el formato típico de estas etiquetas:
+    // >ZDB-P4107, ZDB-P4107, XY-25013, etc.
+    const candidatos = textoLimpio
+        .split(/\s+/)
+        .map(x => x.replace(/[^A-Z0-9>_-]/g, ""))
+        .filter(Boolean);
+
+    const combinados = [];
+    for (const candidato of candidatos) {
+        combinados.push(candidato);
+    }
+
+    const porLinea = textoLimpio
+        .split(/\n+/)
+        .map(x => x.replace(/[^A-Z0-9>_-]/g, "").trim())
+        .filter(Boolean);
+
+    combinados.push(...porLinea);
+
+    for (const candidato of combinados) {
+        const limpio = candidato.replace(/_+/g, "-");
+        if (
+            /^>?[A-Z0-9]{2,}[A-Z0-9_-]*-[A-Z0-9_-]{2,}$/.test(limpio) &&
+            /[A-Z]/.test(limpio) &&
+            /[0-9]/.test(limpio)
+        ) {
+            return limpio;
+        }
+    }
+
+    // Si OCR separó el código en dos partes, probamos a unir tokens.
+    for (let i = 0; i < candidatos.length - 1; i++) {
+        const unido = `${candidatos[i]}-${candidatos[i + 1]}`;
+        if (
+            /^>?[A-Z0-9]{2,}[A-Z0-9_-]*-[A-Z0-9_-]{2,}$/.test(unido) &&
+            /[A-Z]/.test(unido) &&
+            /[0-9]/.test(unido)
+        ) {
+            return unido;
+        }
+    }
+
+    return "";
+}
+
+async function iniciarOCR() {
+    if (ocrLoopActivo || !scannerActivo) return;
+
+    const estado = document.getElementById("scannerEstado");
+    ocrLoopActivo = true;
+
+    try {
+        if (estado) {
+            estado.textContent =
+                "Lector activo. Apunta al código impreso; también intento leer códigos de barras.";
+        }
+
+        const T = await cargarTesseract();
+        if (!T || !scannerActivo) return;
+
+        ocrWorker = await T.createWorker("eng");
+
+        const video = document.querySelector("#reader video");
+        if (!video) {
+            if (estado) {
+                estado.textContent =
+                    "No encontré la cámara. Mantén visible el recuadro y vuelve a intentarlo.";
+            }
+            return;
+        }
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+
+        while (ocrLoopActivo && scannerActivo) {
+            if (!video.videoWidth || !video.videoHeight || ocrProcesando) {
+                await new Promise(r => setTimeout(r, 300));
+                continue;
+            }
+
+            ocrProcesando = true;
+
+            try {
+                const escala = Math.min(
+                    1,
+                    1100 / video.videoWidth
+                );
+
+                canvas.width = Math.max(640, Math.round(video.videoWidth * escala));
+                canvas.height = Math.max(480, Math.round(video.videoHeight * escala));
+
+                ctx.drawImage(
+                    video,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                );
+
+                // Aumentamos contraste para ayudar a leer letras negras sobre blanco.
+                const imagen = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixeles = imagen.data;
+
+                for (let i = 0; i < pixeles.length; i += 4) {
+                    const gris = Math.round(
+                        pixeles[i] * 0.299 +
+                        pixeles[i + 1] * 0.587 +
+                        pixeles[i + 2] * 0.114
+                    );
+                    const contraste = gris < 165 ? 0 : 255;
+                    pixeles[i] = contraste;
+                    pixeles[i + 1] = contraste;
+                    pixeles[i + 2] = contraste;
+                }
+
+                ctx.putImageData(imagen, 0, 0);
+
+                const resultado = await ocrWorker.recognize(canvas);
+                const texto = resultado?.data?.text || "";
+                const codigo = extraerCodigoDesdeOCR(texto);
+
+                if (codigo) {
+                    const encontrado = buscarProductoPorCodigo(codigo);
+
+                    if (encontrado) {
+                        if (estado) {
+                            estado.textContent = `Código detectado: ${codigo}`;
+                        }
+
+                        ocrLoopActivo = false;
+                        procesarCodigoEscaneado(codigo);
+                        break;
+                    }
+
+                    // Aunque todavía no exista, lo mandamos al flujo normal
+                    // para poder registrarlo como producto nuevo.
+                    if (equivalenciaCodigo(codigo).length >= 5) {
+                        if (estado) {
+                            estado.textContent = `Código detectado: ${codigo}. Confirmando...`;
+                        }
+
+                        ocrLoopActivo = false;
+                        procesarCodigoEscaneado(codigo);
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.warn("OCR: no se pudo leer este intento", error);
+            } finally {
+                ocrProcesando = false;
+            }
+
+            await new Promise(r => setTimeout(r, 900));
+        }
+    } catch (error) {
+        console.error("Error iniciando OCR:", error);
+        if (estado && scannerActivo) {
+            estado.textContent =
+                "No se pudo activar la lectura de texto. Puedes escribir el código abajo.";
+        }
+    } finally {
+        ocrLoopActivo = false;
+        ocrProcesando = false;
+    }
+}
+
 async function abrirScanner() {
     const modal = document.getElementById("scannerModal");
     const estado = document.getElementById("scannerEstado");
 
     modal?.classList.add("abierto");
-    if (estado) estado.textContent = "Preparando cámara...";
+
+    if (estado) {
+        estado.textContent =
+            "Preparando cámara y lector...";
+    }
 
     try {
         if (typeof Html5Qrcode === "undefined") {
             if (estado) {
                 estado.textContent =
-                    "No se pudo cargar el lector. Recarga la página e inténtalo de nuevo.";
+                    "No se pudo cargar el lector de cámara. También puedes escribir el código abajo.";
             }
             return;
         }
 
         if (scannerActivo) return;
 
-        /*
-         * ACEPTAMOS LOS PRINCIPALES FORMATOS DE CÓDIGOS DE BARRAS.
-         *
-         * El lector estaba limitado únicamente a CODE 128. Eso hacía
-         * que códigos EAN-13 como los de algunas etiquetas de peluches
-         * no fueran detectados aunque la cámara los enfocara correctamente.
-         *
-         * Se incluyen los formatos 1D más habituales para inventario.
-         * Se comprueba que cada formato exista para mantener compatibilidad
-         * con distintas versiones de html5-qrcode.
-         */
-        const F = window.Html5QrcodeSupportedFormats;
-
-        const formatosDisponibles = [
-            F?.CODABAR,
-            F?.CODE_39,
-            F?.CODE_93,
-            F?.CODE_128,
-            F?.EAN_8,
-            F?.EAN_13,
-            F?.ITF,
-            F?.RSS_14,
-            F?.RSS_EXPANDED,
-            F?.UPC_A,
-            F?.UPC_E
-        ].filter(formato => formato !== undefined);
-
-        const formatos = formatosDisponibles.length > 0
-            ? formatosDisponibles
-            : undefined;
-
-        const configuracionScanner = {
-            fps: 20,
-            qrbox: {
-                width: Math.min(
-                    560,
-                    Math.max(300, Math.floor(window.innerWidth * 0.90))
-                ),
-                height: 280
-            },
-            aspectRatio: 1.7777778,
-            disableFlip: false,
-            videoConstraints: {
-                facingMode: { ideal: "environment" },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-            },
-
-            /*
-             * Si el navegador/teléfono dispone de BarcodeDetector,
-             * Html5Qrcode puede utilizarlo. Si no está disponible,
-             * continúa usando su lector interno.
-             */
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-            }
-        };
-
-        scanner = new Html5Qrcode("reader", {
-            verbose: false,
-            formatsToSupport: formatos
-        });
-
+        scanner = new Html5Qrcode("reader");
         scannerActivo = true;
 
-        const recibirCodigo = codigo => {
-            procesarCodigoEscaneado(codigo);
-        };
-
-        try {
-            await scanner.start(
-                { facingMode: { exact: "environment" } },
-                configuracionScanner,
-                recibirCodigo,
-                () => {}
-            );
-        } catch (errorCamaraExacta) {
-            console.warn(
-                "No se pudo iniciar con cámara exacta. Se intentará con la cámara trasera:",
-                errorCamaraExacta
-            );
-
-            try {
-                await scanner.stop();
-            } catch (e) {}
-
-            try {
-                await scanner.clear();
-            } catch (e) {}
-
-            scanner = new Html5Qrcode("reader", {
-                verbose: false,
-                formatsToSupport: formatos
-            });
-
-            scannerActivo = true;
-
-            await scanner.start(
-                { facingMode: "environment" },
-                configuracionScanner,
-                recibirCodigo,
-                () => {}
-            );
-        }
+        await scanner.start(
+            { facingMode: "environment" },
+            {
+                fps: 10,
+                qrbox: {
+                    width: 320,
+                    height: 180
+                }
+            },
+            codigo => {
+                // Esta ruta sigue funcionando para códigos de barras/QR.
+                procesarCodigoEscaneado(codigo);
+            },
+            () => {}
+        );
 
         if (estado) {
             estado.textContent =
-                "Cámara activa. Coloca el código de barras completo dentro del recuadro.";
+                "Cámara activa. Apunta al código. También leeré códigos impresos como >ZDB-P4107.";
         }
+
+        // La etiqueta de la foto es texto, no un código de barras.
+        // Por eso iniciamos OCR además del lector tradicional.
+        iniciarOCR();
+
     } catch (error) {
         console.error("Error abriendo cámara:", error);
 
-        try {
-            if (scanner) {
-                try {
-                    await scanner.stop();
-                } catch (e) {}
-
-                try {
-                    await scanner.clear();
-                } catch (e) {}
-            }
-        } catch (e) {}
-
-        scannerActivo = false;
-        scanner = null;
-
         if (estado) {
             estado.textContent =
-                "No se pudo iniciar el lector. Revisa el permiso de cámara o usa la entrada manual.";
+                "No se pudo abrir la cámara. Revisa el permiso del navegador o escribe el código.";
         }
+
+        ocrLoopActivo = false;
+        scannerActivo = false;
+        scanner = null;
     }
 }
 
 async function cerrarScanner() {
     const modal = document.getElementById("scannerModal");
 
-    ultimoCodigoDetectado = "";
-    repeticionesCodigoDetectado = 0;
+    ocrLoopActivo = false;
+    ocrProcesando = false;
+
+    if (ocrWorker) {
+        try {
+            await ocrWorker.terminate();
+        } catch (e) {}
+        ocrWorker = null;
+    }
 
     if (scanner && scannerActivo) {
-        try { await scanner.stop(); } catch (e) {}
-        try { await scanner.clear(); } catch (e) {}
+        try {
+            await scanner.stop();
+        } catch (e) {}
+
+        try {
+            await scanner.clear();
+        } catch (e) {}
     }
 
     scanner = null;
     scannerActivo = false;
+
     modal?.classList.remove("abierto");
 
     const codigoManual = document.getElementById("codigoManual");
-    if (codigoManual) codigoManual.value = "";
-}
-
-function normalizarCodigoBarras(valor = "") {
-    /*
-     * Limpieza segura del resultado del lector.
-     *
-     * Algunos lectores pueden anteponer el identificador de
-     * simbología de Code 128, por ejemplo ]C0 o ]C1.
-     * Ese prefijo NO forma parte del código de la etiqueta.
-     */
-    let resultado = String(valor ?? "")
-        .replace(/[\r\n\t]+/g, "")
-        .trim();
-
-    resultado = resultado.replace(/^\]C[01]/i, "");
-
-    /*
-     * Conservamos letras, números, guiones y demás caracteres
-     * que realmente puedan formar parte del código.
-     * No eliminamos el guion de XY-25013.
-     */
-    return resultado;
+    if (codigoManual) {
+        codigoManual.value = "";
+    }
 }
 
 function procesarCodigoEscaneado(codigo) {
-    const valor = normalizarCodigoBarras(codigo);
+    const valor = String(codigo ?? "")
+        .replace(/[\r\n]+/g, " ")
+        .trim();
 
     if (!valor) return;
 
-    /*
-     * No aceptamos una lectura instantánea aislada.
-     * Pedimos dos lecturas consecutivas iguales para reducir
-     * falsos positivos de la cámara.
-     */
-    if (valor !== ultimoCodigoDetectado) {
-        ultimoCodigoDetectado = valor;
-        repeticionesCodigoDetectado = 1;
-
-        const estado = document.getElementById("scannerEstado");
-        if (estado) {
-            estado.textContent =
-                `Código detectado: ${valor}. Confirmando lectura...`;
-        }
-
-        return;
-    }
-
-    repeticionesCodigoDetectado++;
-
-    if (repeticionesCodigoDetectado < 2) return;
-
-    ultimoCodigoDetectado = "";
-    repeticionesCodigoDetectado = 0;
-
     cerrarScanner();
 
-    /*
-     * El código leído se compara ÚNICAMENTE con Etiqueta,
-     * porque Etiqueta es el código de barras físico.
-     */
-    const encontrado = peluches.find(
-        p =>
-            normalizarCodigoBarras(p.etiqueta) === valor
-    );
+    const encontrado = buscarProductoPorCodigo(valor);
 
     if (encontrado) {
-        if (buscar) buscar.value = valor;
+        // Mostramos el código que realmente está guardado en el producto.
+        if (buscar) {
+            buscar.value = encontrado.codigo || encontrado.etiqueta || valor;
+        }
+
         filtroActivo = "todos";
 
-        document.querySelectorAll(".filtro").forEach(boton => {
-            boton.classList.toggle(
-                "activo",
-                boton.dataset.filtro === "todos"
+        document
+            .querySelectorAll(".filtro")
+            .forEach(boton =>
+                boton.classList.toggle(
+                    "activo",
+                    boton.dataset.filtro === "todos"
+                )
             );
-        });
 
         actualizarInterfazBusqueda();
 
         setTimeout(() => {
-            document.querySelector(".tarjeta")?.scrollIntoView({
+            const tarjeta = [...document.querySelectorAll(".tarjeta")]
+                .find(el => {
+                    const texto = normalizar(el.textContent || "");
+                    return texto.includes(normalizar(encontrado.codigo || valor));
+                });
+
+            (tarjeta || document.querySelector(".tarjeta"))?.scrollIntoView({
                 behavior: "smooth",
                 block: "center"
             });
         }, 80);
+
     } else {
         cancelarEdicion();
         abrirFormulario();
 
-        const etiquetaInput =
-            document.getElementById("etiqueta");
-
-        if (etiquetaInput) {
-            etiquetaInput.value = valor;
+        const codigoInput = document.getElementById("codigo");
+        if (codigoInput) {
+            codigoInput.value = valor;
         }
 
         document.getElementById("nombre")?.focus();
 
         alert(
-            "Código de barras no registrado. Se colocó automáticamente en Etiqueta."
+            `Código ${valor} no registrado. Completa los datos para crear el producto.`
         );
     }
 }
