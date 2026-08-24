@@ -612,6 +612,35 @@ if (foto) {
     });
 }
 
+
+// ===== CÓDIGOS DE BARRAS SIN ETIQUETA =====
+// Los códigos SIN-XXXX se guardan en el campo "etiqueta" (código de barras),
+// nunca en "codigo" (costo de compra).
+async function generarCodigoBarrasSinEtiqueta() {
+    const usados = new Set(
+        peluches
+            .map(p => String(p.etiqueta || "").trim().toUpperCase())
+            .filter(Boolean)
+    );
+
+    let numero = 1;
+    while (usados.has(`SIN-${String(numero).padStart(4, "0")}`)) {
+        numero++;
+    }
+    return `SIN-${String(numero).padStart(4, "0")}`;
+}
+
+async function asignarCodigoBarrasSinEtiqueta() {
+    const campo = document.getElementById("etiqueta");
+    if (!campo) return;
+
+    const actual = campo.value.trim();
+    if (actual) return;
+
+    campo.value = await generarCodigoBarrasSinEtiqueta();
+    campo.dataset.generado = "true";
+}
+
 function abrirFormulario() {
     if (!formulario) return;
 
@@ -728,8 +757,17 @@ async function guardarFormulario(e) {
             document.getElementById("fechaIngreso")?.value || "";
 
         if (!codigo || !nombre || !precio) {
-            alert("Completa código, nombre y precio.");
+            alert("Completa código / costo de compra, nombre y precio.");
             return;
+        }
+
+        // Si no existe etiqueta/código de barras, generar uno automáticamente
+        // EN EL CAMPO etiqueta, sin tocar el campo codigo/costo.
+        let etiquetaFinal = etiqueta;
+        if (!etiquetaFinal) {
+            etiquetaFinal = await generarCodigoBarrasSinEtiqueta();
+            const campoEtiqueta = document.getElementById("etiqueta");
+            if (campoEtiqueta) campoEtiqueta.value = etiquetaFinal;
         }
 
         let fotos = [];
@@ -768,7 +806,7 @@ async function guardarFormulario(e) {
             codigo,
             nombre,
             precio,
-            etiqueta,
+            etiqueta: etiquetaFinal,
             tamano,
 
             cantidad,
@@ -2083,3 +2121,10 @@ window.abrirVisorPorId =
     abrirVisorPorId;
 
 cargarPeluches();
+
+
+document.getElementById("btnSinCodigo")?.addEventListener("click", async () => {
+    await asignarCodigoBarrasSinEtiqueta();
+    document.getElementById("etiqueta")?.focus();
+});
+
