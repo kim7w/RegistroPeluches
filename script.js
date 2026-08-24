@@ -1409,18 +1409,34 @@ async function abrirScanner() {
         if (scannerActivo) return;
 
         /*
-         * ESTAS ETIQUETAS SON CODE 128.
+         * ACEPTAMOS LOS PRINCIPALES FORMATOS DE CÓDIGOS DE BARRAS.
          *
-         * Antes se habilitaban muchos formatos al mismo tiempo
-         * (EAN, UPC, CODE 39, CODE 93, ITF, etc.). En algunos
-         * teléfonos eso puede provocar una decodificación incorrecta.
+         * El lector estaba limitado únicamente a CODE 128. Eso hacía
+         * que códigos EAN-13 como los de algunas etiquetas de peluches
+         * no fueran detectados aunque la cámara los enfocara correctamente.
          *
-         * Aquí dejamos únicamente CODE 128, que es el formato de
-         * la etiqueta mostrada, por ejemplo: XY-25013.
+         * Se incluyen los formatos 1D más habituales para inventario.
+         * Se comprueba que cada formato exista para mantener compatibilidad
+         * con distintas versiones de html5-qrcode.
          */
         const F = window.Html5QrcodeSupportedFormats;
-        const formatos = F?.CODE_128 !== undefined
-            ? [F.CODE_128]
+
+        const formatosDisponibles = [
+            F?.CODABAR,
+            F?.CODE_39,
+            F?.CODE_93,
+            F?.CODE_128,
+            F?.EAN_8,
+            F?.EAN_13,
+            F?.ITF,
+            F?.RSS_14,
+            F?.RSS_EXPANDED,
+            F?.UPC_A,
+            F?.UPC_E
+        ].filter(formato => formato !== undefined);
+
+        const formatos = formatosDisponibles.length > 0
+            ? formatosDisponibles
             : undefined;
 
         const configuracionScanner = {
@@ -1430,7 +1446,7 @@ async function abrirScanner() {
                     560,
                     Math.max(300, Math.floor(window.innerWidth * 0.90))
                 ),
-                height: 220
+                height: 280
             },
             aspectRatio: 1.7777778,
             disableFlip: false,
