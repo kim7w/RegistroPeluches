@@ -43,6 +43,9 @@ const btnCancelar = document.getElementById("btnCancelar");
 let peluches = [];
 let editando = null;
 let filtroActivo = "todos";
+let ordenActivo = "reciente";
+const seleccionados = new Set();
+let detalleId = null;
 
 let visorFotos = [];
 let visorIndice = 0;
@@ -229,9 +232,24 @@ function coincideBusqueda(p, texto) {
 }
 
 function obtenerFiltrados() {
-    return peluches.filter(
+    const resultado = peluches.filter(
         p => coincideFiltro(p) && coincideBusqueda(p, buscar?.value || "")
     );
+
+    const numero = valor => numeroSeguro(valor);
+    resultado.sort((a, b) => {
+        if (ordenActivo === "nombre") return normalizar(a.nombre).localeCompare(normalizar(b.nombre), "es");
+        if (ordenActivo === "nombre-desc") return normalizar(b.nombre).localeCompare(normalizar(a.nombre), "es");
+        if (ordenActivo === "precio") return numero(a.precio) - numero(b.precio);
+        if (ordenActivo === "precio-desc") return numero(b.precio) - numero(a.precio);
+        if (ordenActivo === "cantidad") return obtenerCantidad(b) - obtenerCantidad(a);
+        if (ordenActivo === "cantidad-asc") return obtenerCantidad(a) - obtenerCantidad(b);
+        if (ordenActivo === "agotados") return Number(estadoPeluche(b) === "Agotado") - Number(estadoPeluche(a) === "Agotado");
+        if (ordenActivo === "bajo") return Number(estadoPeluche(b) === "Poco inventario") - Number(estadoPeluche(a) === "Poco inventario");
+        return (String(b.fechaIngreso || "").localeCompare(String(a.fechaIngreso || ""))) || (peluches.indexOf(a) - peluches.indexOf(b));
+    });
+
+    return resultado;
 }
 
 function actualizarInterfazBusqueda() {
@@ -266,6 +284,143 @@ function actualizarInterfazBusqueda() {
     }
 
     mostrarPeluches(resultado);
+}
+
+
+function actualizarSeleccionUI() {
+    const toolbar = document.getElementById("seleccionToolbar");
+    const count = document.getElementById("seleccionCount");
+    if (count) count.textContent = seleccionados.size;
+    if (toolbar) toolbar.hidden = seleccionados.size === 0;
+
+    document.querySelectorAll(".tarjeta[data-id]").forEach(tarjeta => {
+        tarjeta.classList.toggle("seleccionada", seleccionados.has(tarjeta.dataset.id));
+        const check = tarjeta.querySelector(".seleccion-check");
+        if (check) check.checked = seleccionados.has(tarjeta.dataset.id);
+    });
+}
+
+function alternarSeleccion(id, evento) {
+    evento?.stopPropagation();
+    if (seleccionados.has(id)) seleccionados.delete(id);
+    else seleccionados.add(id);
+    actualizarSeleccionUI();
+}
+
+function seleccionarVisibles() {
+    obtenerFiltrados().forEach(p => seleccionados.add(p.id));
+    actualizarSeleccionUI();
+}
+
+function quitarSeleccion() {
+    seleccionados.clear();
+    actualizarSeleccionUI();
+}
+
+function obtenerPeluchesParaImprimir() {
+    if (seleccionados.size) {
+        return peluches.filter(p => seleccionados.has(p.id));
+    }
+    const visibles = obtenerFiltrados();
+    if (visibles.length) return visibles;
+    return peluches;
+}
+
+function generarSVGBarcode(valor) {
+    if (!valor || typeof window.JsBarcode !== "function") return "";
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    document.body.appendChild(svg);
+    try {
+        window.JsBarcode(svg, valor, {
+            format: "CODE128",
+            displayValue: true,
+            fontSize: 14,
+            height: 48,
+            margin: 4,
+            width: 1.7
+        });
+        return svg.outerHTML;
+    } finally {
+        svg.remove();
+    }
+}
+
+function imprimirEtiquetas() {
+    const productos = obtenerPeluchesParaImprimir();
+    if (!productos.length) {
+        alert("No hay peluches para imprimir.");
+        return;
+    }
+
+    const etiquetas = productos.map(p => {
+        const codigoBarra = p.etiqueta || p.codigo || "";
+        const svg = generarSVGBarcode(codigoBarra);
+        return `<div class="etiqueta-imprimir">
+            <div class="etiqueta-nombre">${escaparHTML(p.nombre || "Peluche")}</div>
+            <div class="etiqueta-codigo">${escaparHTML(codigoBarra)}</div>
+            ${svg || `<div class="sin-barcode">${escaparHTML(codigoBarra)}</div>`}
+            <div class="etiqueta-interno">Código interno: ${escaparHTML(p.codigo || "—")} · Q${escaparHTML(p.precio ?? "0")}</div>
+        </div>`;
+    }).join("");
+
+    const ventana = window.open("", "_blank", "width=900,height=700");
+    if (!ventana) {
+        alert("El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes para esta página.");
+        return;
+    }
+
+    ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiquetas de peluches</title>
+    <style>
+    *{box-sizing:border-box}body{margin:0;padding:10mm;font-family:Arial,sans-serif}.hoja{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}.etiqueta-imprimir{height:38mm;border:1px dashed #777;border-radius:3mm;padding:3mm;text-align:center;break-inside:avoid;display:flex;flex-direction:column;justify-content:center}.etiqueta-nombre{font-size:12pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.etiqueta-codigo{font-size:9pt;margin-top:1mm;font-weight:700}.etiqueta-imprimir svg{width:100%;max-height:16mm}.etiqueta-interno{font-size:7pt;margin-top:1mm}.sin-barcode{font-size:15pt;font-weight:700;margin:4mm 0}@media print{body{padding:0}.hoja{gap:3mm}}
+    </style></head><body><div class="hoja">${etiquetas}</div><script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+    ventana.document.close();
+}
+
+function abrirDetalle(id) {
+    const p = peluches.find(x => x.id === id);
+    if (!p) return;
+    detalleId = id;
+
+    const fotos = obtenerFotos(p);
+    const principal = fotos[0] || "";
+    const local = obtenerCantidadLocal(p);
+    const bodega = obtenerCantidadBodega(p);
+    const total = obtenerCantidad(p);
+    const estado = estadoPeluche(p);
+
+    const titulo = document.getElementById("detalleTitulo");
+    const subtitulo = document.getElementById("detalleSubtitulo");
+    const contenido = document.getElementById("detalleContenido");
+    if (titulo) titulo.textContent = p.nombre || "Peluche";
+    if (subtitulo) subtitulo.textContent = `${p.etiqueta || "Sin etiqueta"} · ${p.codigo || "Sin código interno"}`;
+    if (contenido) {
+        contenido.innerHTML = `<div class="detalle-contenido">
+            ${principal ? `<img class="detalle-imagen" src="${escaparHTML(principal)}" alt="${escaparHTML(p.nombre || "Peluche")}">` : `<div class="detalle-imagen sin-foto">🧸</div>`}
+            <div>
+                <div class="detalle-datos">
+                    <div class="detalle-dato"><small>PRECIO</small><strong>Q${escaparHTML(p.precio ?? "0")}</strong></div>
+                    <div class="detalle-dato"><small>ESTADO</small><strong>${escaparHTML(estado)}</strong></div>
+                    <div class="detalle-dato"><small>🏪 LOCAL</small><strong>${local}</strong></div>
+                    <div class="detalle-dato"><small>📦 BODEGA</small><strong>${bodega}</strong></div>
+                    <div class="detalle-dato"><small>📊 TOTAL</small><strong>${total}</strong></div>
+                    <div class="detalle-dato"><small>⚠️ MÍNIMO</small><strong>${obtenerMinimo(p)}</strong></div>
+                </div>
+                ${p.tamano ? `<p><strong>📏 Medida:</strong> ${escaparHTML(p.tamano)}</p>` : ""}
+                ${p.observaciones ? `<p><strong>💬 Observaciones:</strong> ${escaparHTML(p.observaciones)}</p>` : ""}
+                ${p.etiqueta ? `<div class="detalle-barcode-wrap"><svg id="detalleBarcode" class="detalle-barcode"></svg></div>` : ""}
+            </div>
+        </div>`;
+        if (p.etiqueta && typeof window.JsBarcode === "function") {
+            try { window.JsBarcode("#detalleBarcode", p.etiqueta, {format:"CODE128", displayValue:true, height:55, margin:4}); } catch(e) {}
+        }
+    }
+    document.getElementById("detalleModal")?.classList.add("abierto");
+}
+
+function cerrarDetalle() {
+    document.getElementById("detalleModal")?.classList.remove("abierto");
+    detalleId = null;
 }
 
 function crearTarjeta(p) {
@@ -308,7 +463,8 @@ function crearTarjeta(p) {
     const badgeClass = agotado ? "agotado" : (bajo ? "bajo" : "");
 
     return `
-        <article class="tarjeta">
+        <article class="tarjeta" data-id="${p.id}">
+            <input class="seleccion-check" type="checkbox" aria-label="Seleccionar ${escaparHTML(p.nombre || "peluche")}" ${seleccionados.has(p.id) ? "checked" : ""} onclick="alternarSeleccion('${p.id}',event)">
             <div class="imagen-principal">
                 ${imagen}
                 <span class="badge-estado ${badgeClass}">${estado}</span>
@@ -320,7 +476,7 @@ function crearTarjeta(p) {
             ${miniaturas}
 
             <div class="info">
-                <h3>${escaparHTML(p.nombre || "Sin nombre")}</h3>
+                <h3 class="nombre-clicable" onclick="abrirDetalle('${p.id}')">${escaparHTML(p.nombre || "Sin nombre")}</h3>
 
                 <div class="etiquetas">
                     ${
@@ -434,6 +590,7 @@ function mostrarPeluches(datos) {
     if (sinResultados) {
         sinResultados.style.display = datos.length ? "none" : "block";
     }
+    actualizarSeleccionUI();
 }
 
 async function cargarPeluches() {
@@ -624,10 +781,13 @@ async function generarCodigoBarrasSinEtiqueta() {
     );
 
     let numero = 1;
-    while (usados.has(`SIN-${String(numero).padStart(4, "0")}`)) {
+
+    // Códigos generados con cinco dígitos: SIN-00001, SIN-00002...
+    while (usados.has(`SIN-${String(numero).padStart(5, "0")}`)) {
         numero++;
     }
-    return `SIN-${String(numero).padStart(4, "0")}`;
+
+    return `SIN-${String(numero).padStart(5, "0")}`;
 }
 
 async function asignarCodigoBarrasSinEtiqueta() {
@@ -789,15 +949,17 @@ async function guardarFormulario(e) {
                 : [];
         }
 
-        const existentePorCodigo = peluches.find(
+        // El código interno / código del producto puede repetirse.
+        // La etiqueta / código de barras es la que debe ser única.
+        const existentePorEtiqueta = peluches.find(
             p =>
-                normalizar(p.codigo) === normalizar(codigo) &&
+                normalizar(p.etiqueta) === normalizar(etiquetaFinal) &&
                 p.id !== editando
         );
 
-        if (existentePorCodigo) {
+        if (existentePorEtiqueta) {
             alert(
-                "Ese código ya está registrado. Busca el producto existente o usa otro código."
+                "Ese código de barras / etiqueta ya está registrado. Busca el producto existente o usa otro código."
             );
             return;
         }
@@ -1005,6 +1167,72 @@ btnCancelar?.addEventListener(
         cerrarFormulario();
     }
 );
+
+
+function descargarArchivo(nombre, contenido, tipo = "application/json") {
+    const blob = new Blob([contenido], { type: tipo });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportarRespaldo() {
+    const respaldo = {
+        version: 1,
+        app: "Registro de Peluches de Kim",
+        exportado: new Date().toISOString(),
+        peluches: peluches.map(p => ({ ...p, id: undefined }))
+    };
+    const fecha = new Date().toISOString().slice(0,10);
+    descargarArchivo(`respaldo_peluches_${fecha}.json`, JSON.stringify(respaldo, null, 2));
+    alert("✅ Copia de seguridad descargada.");
+}
+
+async function importarRespaldo(archivo) {
+    if (!archivo) return;
+    try {
+        const texto = await archivo.text();
+        const respaldo = JSON.parse(texto);
+        const registros = Array.isArray(respaldo) ? respaldo : respaldo.peluches;
+        if (!Array.isArray(registros)) throw new Error("El archivo no contiene una lista válida de peluches.");
+
+        const existentes = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
+        let agregados = 0;
+        let omitidos = 0;
+
+        for (const original of registros) {
+            const datos = { ...original };
+            delete datos.id;
+            if (!datos.codigo || !datos.nombre) { omitidos++; continue; }
+            if (!datos.etiqueta) {
+                let n = 1;
+                while (existentes.has(`sin-${String(n).padStart(5, "0")}`)) n++;
+                datos.etiqueta = `SIN-${String(n).padStart(5, "0")}`;
+            }
+            const clave = normalizar(datos.etiqueta);
+            if (existentes.has(clave)) { omitidos++; continue; }
+            datos.cantidadLocal = Math.max(0, numeroSeguro(datos.cantidadLocal));
+            datos.cantidadBodega = Math.max(0, numeroSeguro(datos.cantidadBodega));
+            datos.cantidad = datos.cantidadLocal + datos.cantidadBodega;
+            datos.minimo = Math.max(0, numeroSeguro(datos.minimo ?? MINIMO_DEFECTO));
+            datos.estado = estadoPeluche(datos);
+            await addDoc(collection(db, "peluches"), datos);
+            existentes.add(clave);
+            agregados++;
+        }
+
+        alert(`Importación terminada.\n\n✅ Agregados: ${agregados}\n⏭️ Omitidos por duplicado o datos incompletos: ${omitidos}`);
+        await cargarPeluches();
+    } catch (error) {
+        console.error("Error importando respaldo:", error);
+        alert(`No se pudo importar el respaldo.\n\n${error.message || "Archivo no válido."}`);
+    }
+}
 
 async function eliminarPeluche(id) {
     if (
@@ -1739,50 +1967,26 @@ function procesarCodigoEscaneado(codigo) {
     const encontrado = buscarProductoPorCodigo(valor);
 
     if (encontrado) {
-        // Mostramos el código que realmente está guardado en el producto.
-        if (buscar) {
-            buscar.value = encontrado.codigo || encontrado.etiqueta || valor;
-        }
-
+        if (buscar) buscar.value = encontrado.etiqueta || encontrado.codigo || valor;
         filtroActivo = "todos";
-
-        document
-            .querySelectorAll(".filtro")
-            .forEach(boton =>
-                boton.classList.toggle(
-                    "activo",
-                    boton.dataset.filtro === "todos"
-                )
-            );
-
+        document.querySelectorAll(".filtro").forEach(boton => boton.classList.toggle("activo", boton.dataset.filtro === "todos"));
         actualizarInterfazBusqueda();
-
-        setTimeout(() => {
-            const tarjeta = [...document.querySelectorAll(".tarjeta")]
-                .find(el => {
-                    const texto = normalizar(el.textContent || "");
-                    return texto.includes(normalizar(encontrado.codigo || valor));
-                });
-
-            (tarjeta || document.querySelector(".tarjeta"))?.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
-        }, 80);
-
+        setTimeout(() => abrirDetalle(encontrado.id), 80);
     } else {
         cancelarEdicion();
         abrirFormulario();
 
-        const codigoInput = document.getElementById("codigo");
-        if (codigoInput) {
-            codigoInput.value = valor;
+        // El escáner trabaja con la ETIQUETA / código de barras.
+        // El código interno (#1N0FWB, etc.) se escribe aparte y puede repetirse.
+        const etiquetaInput = document.getElementById("etiqueta");
+        if (etiquetaInput) {
+            etiquetaInput.value = valor;
         }
 
-        document.getElementById("nombre")?.focus();
+        document.getElementById("codigo")?.focus();
 
         alert(
-            `Código ${valor} no registrado. Completa los datos para crear el producto.`
+            `Código ${valor} no registrado. Se colocó en Etiqueta / código de barras. Completa los demás datos para crear el producto.`
         );
     }
 }
@@ -2104,6 +2308,46 @@ document.addEventListener(
     }
 );
 
+
+document.getElementById("ordenar")?.addEventListener("change", e => {
+    ordenActivo = e.target.value;
+    actualizarInterfazBusqueda();
+});
+
+document.getElementById("btnSeleccionarTodos")?.addEventListener("click", seleccionarVisibles);
+document.getElementById("btnQuitarSeleccion")?.addEventListener("click", quitarSeleccion);
+document.getElementById("btnImprimirSeleccion")?.addEventListener("click", imprimirEtiquetas);
+document.getElementById("btnImprimir")?.addEventListener("click", imprimirEtiquetas);
+document.getElementById("btnExportar")?.addEventListener("click", exportarRespaldo);
+document.getElementById("btnImportar")?.addEventListener("click", () => document.getElementById("archivoImportar")?.click());
+document.getElementById("archivoImportar")?.addEventListener("change", e => {
+    const archivo = e.target.files?.[0];
+    importarRespaldo(archivo);
+    e.target.value = "";
+});
+document.getElementById("cerrarDetalle")?.addEventListener("click", cerrarDetalle);
+document.getElementById("detalleModal")?.addEventListener("click", e => {
+    if (e.target.id === "detalleModal") cerrarDetalle();
+});
+document.getElementById("detalleEntrada")?.addEventListener("click", () => {
+    if (!detalleId) return;
+    const id = detalleId;
+    cerrarDetalle();
+    abrirMovimiento(id, "entrada");
+});
+document.getElementById("detalleSalida")?.addEventListener("click", () => {
+    if (!detalleId) return;
+    const id = detalleId;
+    cerrarDetalle();
+    abrirMovimiento(id, "salida");
+});
+document.getElementById("detalleEditar")?.addEventListener("click", () => {
+    if (!detalleId) return;
+    const id = detalleId;
+    cerrarDetalle();
+    editarPeluche(id);
+});
+
 // Funciones utilizadas directamente desde el HTML.
 window.editarPeluche =
     editarPeluche;
@@ -2117,9 +2361,13 @@ window.abrirMovimiento =
 window.cambiarFotoTarjeta =
     cambiarFotoTarjeta;
 
+window.alternarSeleccion = alternarSeleccion;
+window.abrirDetalle = abrirDetalle;
+
 window.abrirVisorPorId =
     abrirVisorPorId;
 
+cerrarFormulario();
 cargarPeluches();
 
 
