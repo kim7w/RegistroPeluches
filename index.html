@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#8b5cf6">
-    <title>Registro de Peluches de Kim </title>
+    <title>Registro de Peluches de Kim :)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -12,15 +12,42 @@
 </head>
 <body>
 <div class="contenedor">
+<div class="menu-overlay" id="menuOverlay" hidden></div>
+<aside class="menu-lateral" id="menuLateral" aria-label="Menú principal" aria-hidden="true">
+    <div class="menu-cabecera">
+        <div class="menu-marca"><span>🧸</span><div><strong>Peluches</strong><small>Inventario</small></div></div>
+        <button type="button" id="cerrarMenu" class="menu-cerrar" aria-label="Cerrar menú">×</button>
+    </div>
+    <div class="menu-resumen">
+        <div><strong id="menuTotalPeluche">0</strong><span>Peluches</span></div>
+        <div><strong id="menuTotalUnidades">0</strong><span>Unidades</span></div>
+    </div>
+    <nav class="menu-nav">
+        <button type="button" data-menu-action="inicio">🏠 <span>Inicio</span></button>
+        <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
+        <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
+        <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
+        <div class="menu-separador"></div>
+        <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
+        <button type="button" data-menu-action="agotado">❌ <span>Agotados</span><b id="menuTotalAgotados">0</b></button>
+        <button type="button" data-menu-action="etiquetas">🖨️ <span>Imprimir etiquetas</span></button>
+        <div class="menu-separador"></div>
+        <button type="button" data-menu-action="exportar">💾 <span>Copia de seguridad</span></button>
+        <button type="button" data-menu-action="importar">📥 <span>Importar respaldo</span></button>
+    </nav>
+    <div class="menu-pie">Versión de inventario · Peluches</div>
+</aside>
 
     <header class="encabezado">
+        <button type="button" id="btnMenu" class="btn-menu" aria-label="Abrir menú" aria-expanded="false">☰</button>
         <div class="encabezado-icono">🧸</div>
-        <div>
+        <div class="encabezado-titulo">
             <h1>Registro de Peluches de Kim :)</h1>
+            <span>Inventario rápido</span>
         </div>
     </header>
 
-    <section class="resumen" aria-label="Resumen del inventario">
+    <section class="resumen" id="seccionResumen" aria-label="Resumen del inventario">
         <div class="estadistica">
             <span class="estadistica-icono">🧸</span>
             <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
@@ -52,7 +79,7 @@
         <button type="button" id="btnExportar" class="herramienta">💾 Copia de seguridad</button>
         <button type="button" id="btnImportar" class="herramienta">📥 Importar respaldo</button>
         <input type="file" id="archivoImportar" accept="application/json" hidden>
-        <button type="button" id="btnImprimir" class="herramienta">🖨️ Imprimir etiquetas</button>
+        <button type="button" id="btnImprimir" class="herramienta">🖨️ Seleccionar etiquetas</button>
         <label class="ordenar-control">↕️ Ordenar
             <select id="ordenar">
                 <option value="reciente">Más recientes</option>
@@ -68,7 +95,7 @@
         </label>
     </section>
 
-    <section class="panel-busqueda">
+    <section class="panel-busqueda" id="seccionPeluches">
         <div class="buscador-wrap">
             <span class="buscador-icono">🔎</span>
             <input type="search" id="buscar" autocomplete="off"
@@ -152,7 +179,7 @@
     </section>
 
     <section class="seleccion-toolbar" id="seleccionToolbar" hidden>
-        <strong><span id="seleccionCount">0</span> seleccionados</strong>
+        <strong>🖨️ Selección para imprimir: <span id="seleccionCount">0</span></strong>
         <button type="button" id="btnSeleccionarTodos">☑️ Seleccionar visibles</button>
         <button type="button" id="btnQuitarSeleccion">✖️ Quitar selección</button>
         <button type="button" id="btnImprimirSeleccion">🖨️ Imprimir seleccionados</button>
