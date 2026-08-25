@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#8b5cf6">
-    <title>Registro de Peluches de Kim :)</title>
+    <title>Registro de Peluches de Kim 💜</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
 <div class="menu-overlay" id="menuOverlay" hidden></div>
 <aside class="menu-lateral" id="menuLateral" aria-label="Menú principal" aria-hidden="true">
     <div class="menu-cabecera">
-        <div class="menu-marca"><span>🧸</span><div><strong>Peluches</strong><small>Inventario</small></div></div>
+        <div class="menu-marca"><span>🧸</span><div><strong>Registro de Peluches</strong><small>de Kim 💜</small></div></div>
         <button type="button" id="cerrarMenu" class="menu-cerrar" aria-label="Cerrar menú">×</button>
     </div>
     <div class="menu-resumen">
@@ -27,11 +27,11 @@
         <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
         <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
         <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
-        <button type="button" data-menu-action="rapido">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
+        <button type="button" data-menu-action="rapido">⚡ <span>Modo trabajo rápido</span><b id="menuRapidoEstado">OFF</b></button>
+        <button type="button" data-menu-action="historial">🕘 <span>Historial de movimientos</span></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
         <button type="button" data-menu-action="agotado">❌ <span>Agotados</span><b id="menuTotalAgotados">0</b></button>
-        <button type="button" data-menu-action="historial">🕘 <span>Historial de movimientos</span></button>
         <button type="button" data-menu-action="etiquetas">🖨️ <span>Imprimir etiquetas</span></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="exportar">💾 <span>Copia de seguridad</span></button>
@@ -44,8 +44,8 @@
         <button type="button" id="btnMenu" class="btn-menu" aria-label="Abrir menú" aria-expanded="false">☰</button>
         <div class="encabezado-icono">🧸</div>
         <div class="encabezado-titulo">
-            <h1>Registro de Peluches de Kim :)</h1>
-            <span>Inventario rápido</span>
+            <h1>Registro de Peluches de Kim 💜</h1>
+            <span>Control de inventario</span>
         </div>
     </header>
 
@@ -75,11 +75,6 @@
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
-    </section>
-
-    <section class="modo-rapido-barra" id="modoRapidoBarra" hidden>
-        <div><strong>⚡ Modo trabajo rápido</strong><small>Usa los botones +1 / −1 directamente en cada tarjeta.</small></div>
-        <button type="button" id="btnSalirModoRapido">Salir</button>
     </section>
 
     <section class="herramientas-inventario" aria-label="Herramientas del inventario">
@@ -118,8 +113,8 @@
             <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles</button>
             <button type="button" class="filtro" data-filtro="bajo">⚠️ Bajo</button>
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
-            <button type="button" class="filtro" data-filtro="local">🏪 Con stock local</button>
-            <button type="button" class="filtro" data-filtro="bodega">📦 Con stock bodega</button>
+            <button type="button" class="filtro filtro-ubicacion" data-filtro="local">🏪 En local</button>
+            <button type="button" class="filtro filtro-ubicacion" data-filtro="bodega">📦 En bodega</button>
         </div>
 
         <div class="resultado-info">
@@ -150,7 +145,6 @@
                     <div class="campo-barcode">
                         <input type="text" id="etiqueta" placeholder="Escanea o escribe el código de barras">
                         <button type="button" id="btnEscanearFormulario" class="btn-escanear-campo">📷 Escanear</button>
-                         <button type="button" id="btnSinCodigo" class="btn-escanear-campo">➕ Sin código</button>
                     </div>
                 </label>
                 <label>Medida
@@ -231,15 +225,7 @@
             <button type="button" id="detalleEntrada">➕ Entrada</button>
             <button type="button" id="detalleSalida">➖ Salida</button>
             <button type="button" id="detalleEditar">✏️ Editar</button>
-            <button type="button" id="detalleHistorial">🕘 Historial</button>
         </div>
-    </div>
-</div>
-
-<div id="historialModal" class="modal" role="dialog" aria-modal="true" aria-label="Historial de movimientos">
-    <div class="modal-card historial-card">
-        <div class="modal-header"><div><h2>🕘 Historial de movimientos</h2><p id="historialProducto">Producto</p></div><button type="button" id="cerrarHistorial" class="modal-close" aria-label="Cerrar">×</button></div>
-        <div id="historialContenido" class="historial-lista"></div>
     </div>
 </div>
 
@@ -272,6 +258,18 @@
         </div>
     </div>
 </div>
+
+<div id="historialModal" class="modal" role="dialog" aria-modal="true" aria-label="Historial de movimientos">
+    <div class="modal-card historial-card">
+        <div class="modal-header">
+            <div><h2>🕘 Historial de movimientos</h2><p>Entradas y salidas recientes del inventario.</p></div>
+            <button type="button" id="cerrarHistorial" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <div id="historialContenido" class="historial-contenido"></div>
+    </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <div id="visorImagen" class="visor" role="dialog" aria-modal="true" aria-label="Vista de imagen">
     <button id="cerrarVisor" class="cerrar-visor" aria-label="Cerrar">×</button>
