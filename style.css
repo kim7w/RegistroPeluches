@@ -114,3 +114,20 @@ border:1px solid rgba(231,225,242,.95);border-radius:20px;background:#fff;box-sh
  #lista .datos{gap:3px}
  #lista .dato{padding:5px}
 }
+
+
+/* ===== Mejoras de inventario ===== */
+.herramientas-inventario{display:grid;grid-template-columns:repeat(3,1fr) 1.5fr;gap:9px;margin:0 0 18px}
+.herramienta,.ordenar-control{min-height:48px;padding:10px 13px;border:1px solid var(--borde);border-radius:14px;background:#fff;color:var(--texto);font-weight:900;box-shadow:var(--sombra)}
+.herramienta:hover{border-color:#c4b5fd;background:#faf8ff}
+.ordenar-control{display:flex;align-items:center;gap:8px}.ordenar-control select{flex:1;border:0;outline:0;background:transparent;color:var(--texto);font-weight:900}
+.seleccion-toolbar{position:sticky;top:8px;z-index:20;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;margin-bottom:12px;border:1px solid #ddd6fe;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:var(--sombra)}
+.seleccion-toolbar[hidden]{display:none}.seleccion-toolbar button{border:0;border-radius:10px;padding:9px 11px;background:#f2edff;color:var(--primario-oscuro);font-weight:900}
+.seleccion-check{position:absolute;z-index:3;right:10px;top:52px;width:24px;height:24px;accent-color:var(--primario);cursor:pointer}
+.tarjeta.seleccionada{outline:3px solid #a78bfa;outline-offset:2px}
+.detalle-card{width:min(650px,100%)}.detalle-contenido{display:grid;grid-template-columns:180px 1fr;gap:16px}.detalle-imagen{width:100%;height:180px;object-fit:cover;border-radius:16px;background:#f5f1ff}.detalle-datos{display:grid;grid-template-columns:1fr 1fr;gap:8px}.detalle-dato{padding:10px;border-radius:12px;background:#f8f7fb}.detalle-dato small{display:block;color:var(--muted);font-weight:800;font-size:10px}.detalle-dato strong{display:block;margin-top:3px;font-size:16px}.detalle-botones{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:15px}.detalle-botones button{border:0;border-radius:12px;padding:12px;color:#fff;background:var(--primario);font-weight:900}.detalle-botones button:nth-child(2){background:#f59e0b;color:#422006}.detalle-botones button:nth-child(3){background:#7c3aed}
+.detalle-barcode{width:100%;max-width:280px;margin:10px auto 0;display:block;background:#fff}
+@media(max-width:700px){.herramientas-inventario{grid-template-columns:1fr 1fr}.ordenar-control{grid-column:1/-1}.seleccion-toolbar{top:3px}.detalle-contenido{grid-template-columns:1fr}.detalle-imagen{height:220px}.detalle-botones{grid-template-columns:1fr}}
+@media(max-width:390px){.herramienta{font-size:11px;padding:8px}.ordenar-control{font-size:11px}.seleccion-toolbar{font-size:11px}.seleccion-toolbar button{font-size:10px}}
+
+.nombre-clicable{cursor:pointer}.nombre-clicable:hover{color:var(--primario-oscuro);text-decoration:underline}
