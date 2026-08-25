@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#8b5cf6">
-    <title>Registro de Peluches de Kim <3 </title>
+    <title>Registro de Peluches de Kim </title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -37,11 +37,35 @@
             <span class="estadistica-icono">🏷️</span>
             <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
         </div>
+        <div class="estadistica alerta" id="tarjetaBajo">
+            <span class="estadistica-icono">⚠️</span>
+            <div><strong id="totalBajo">0</strong><small>Inventario bajo</small></div>
+        </div>
     </section>
 
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
+    </section>
+
+    <section class="herramientas-inventario" aria-label="Herramientas del inventario">
+        <button type="button" id="btnExportar" class="herramienta">💾 Copia de seguridad</button>
+        <button type="button" id="btnImportar" class="herramienta">📥 Importar respaldo</button>
+        <input type="file" id="archivoImportar" accept="application/json" hidden>
+        <button type="button" id="btnImprimir" class="herramienta">🖨️ Imprimir etiquetas</button>
+        <label class="ordenar-control">↕️ Ordenar
+            <select id="ordenar">
+                <option value="reciente">Más recientes</option>
+                <option value="nombre">Nombre A-Z</option>
+                <option value="nombre-desc">Nombre Z-A</option>
+                <option value="precio">Precio menor → mayor</option>
+                <option value="precio-desc">Precio mayor → menor</option>
+                <option value="cantidad">Más unidades</option>
+                <option value="cantidad-asc">Menos unidades</option>
+                <option value="agotados">Agotados primero</option>
+                <option value="bajo">Inventario bajo primero</option>
+            </select>
+        </label>
     </section>
 
     <section class="panel-busqueda">
@@ -58,6 +82,7 @@
             <button type="button" class="filtro" data-filtro="mediano">📐 Medianos</button>
             <button type="button" class="filtro" data-filtro="pequeno">🤏 Pequeños</button>
             <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles</button>
+            <button type="button" class="filtro" data-filtro="bajo">⚠️ Bajo</button>
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
         </div>
 
@@ -67,20 +92,17 @@
         </div>
     </section>
 
-    <section class="formulario-panel">
-        <button type="button" class="formulario-toggle" id="toggleFormulario" aria-expanded="true">
+    <section class="formulario-panel colapsado" id="formularioPanel">
+        <button type="button" class="formulario-toggle" id="toggleFormulario" aria-expanded="false">
             <span>➕ Agregar / editar peluche</span>
-            <span id="flechaFormulario">⌃</span>
+            <span id="flechaFormulario">⌄</span>
         </button>
 
         <form id="formulario">
             <div class="form-grid">
                 <label>Código interno / código del producto
-                    <div class="campo-barcode">
-                        <input type="text" id="codigo" placeholder="Ej. OS-001 o SIN-0001" required>
-                        <button type="button" id="btnCodigoInterno" class="btn-escanear-campo">➕ Sin código</button>
-                    </div>
-                    <small>Si el producto no trae código de barras, pulsa <strong>Sin código</strong> y se asignará uno automáticamente.</small>
+                    <input type="text" id="codigo" placeholder="Ej. OS-001" required>
+                    <small>Este código identifica el tipo o producto y puede repetirse.</small>
                 </label>
                 <label>Nombre
                     <input type="text" id="nombre" placeholder="Ej. Osito café" required>
@@ -129,6 +151,13 @@
         </form>
     </section>
 
+    <section class="seleccion-toolbar" id="seleccionToolbar" hidden>
+        <strong><span id="seleccionCount">0</span> seleccionados</strong>
+        <button type="button" id="btnSeleccionarTodos">☑️ Seleccionar visibles</button>
+        <button type="button" id="btnQuitarSeleccion">✖️ Quitar selección</button>
+        <button type="button" id="btnImprimirSeleccion">🖨️ Imprimir seleccionados</button>
+    </section>
+
     <div id="lista" aria-live="polite"></div>
     <div id="sinResultados" class="sin-resultados" style="display:none;">
         <div>🧸</div>
@@ -151,6 +180,21 @@
         <div class="scanner-manual">
             <input type="text" id="codigoManual" placeholder="Escribe el código de barras">
             <button type="button" id="btnCodigoManual">Buscar</button>
+        </div>
+    </div>
+</div>
+
+<div id="detalleModal" class="modal" role="dialog" aria-modal="true" aria-label="Detalle del peluche">
+    <div class="modal-card detalle-card">
+        <div class="modal-header">
+            <div><h2 id="detalleTitulo">Peluche</h2><p id="detalleSubtitulo">Detalle del inventario</p></div>
+            <button type="button" id="cerrarDetalle" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <div id="detalleContenido"></div>
+        <div class="detalle-botones">
+            <button type="button" id="detalleEntrada">➕ Entrada</button>
+            <button type="button" id="detalleSalida">➖ Salida</button>
+            <button type="button" id="detalleEditar">✏️ Editar</button>
         </div>
     </div>
 </div>
@@ -194,6 +238,7 @@
 </div>
 
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script type="module" src="script.js"></script>
 </body>
 </html>
