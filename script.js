@@ -45,6 +45,7 @@ let editando = null;
 let filtroActivo = "todos";
 let ordenActivo = "reciente";
 const seleccionados = new Set();
+let modoSeleccion = false;
 let detalleId = null;
 
 let visorFotos = [];
@@ -290,20 +291,55 @@ function actualizarInterfazBusqueda() {
 function actualizarSeleccionUI() {
     const toolbar = document.getElementById("seleccionToolbar");
     const count = document.getElementById("seleccionCount");
+    const btnImprimir = document.getElementById("btnImprimir");
+
     if (count) count.textContent = seleccionados.size;
-    if (toolbar) toolbar.hidden = seleccionados.size === 0;
+    if (toolbar) toolbar.hidden = !modoSeleccion;
+
+    if (btnImprimir) {
+        btnImprimir.textContent = modoSeleccion
+            ? "❌ Cancelar selección"
+            : "🖨️ Seleccionar etiquetas";
+    }
 
     document.querySelectorAll(".tarjeta[data-id]").forEach(tarjeta => {
-        tarjeta.classList.toggle("seleccionada", seleccionados.has(tarjeta.dataset.id));
+        tarjeta.classList.toggle(
+            "seleccionada",
+            modoSeleccion && seleccionados.has(tarjeta.dataset.id)
+        );
+
         const check = tarjeta.querySelector(".seleccion-check");
-        if (check) check.checked = seleccionados.has(tarjeta.dataset.id);
+        if (check) {
+            check.checked = seleccionados.has(tarjeta.dataset.id);
+            check.hidden = !modoSeleccion;
+        }
     });
+}
+
+function activarModoSeleccion() {
+    modoSeleccion = true;
+    seleccionados.clear();
+    actualizarSeleccionUI();
+    // Lleva la vista a la zona de productos para que se pueda seleccionar de inmediato.
+    document.getElementById("lista")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+}
+
+function salirModoSeleccion() {
+    modoSeleccion = false;
+    seleccionados.clear();
+    actualizarSeleccionUI();
 }
 
 function alternarSeleccion(id, evento) {
     evento?.stopPropagation();
+    if (!modoSeleccion) return;
+
     if (seleccionados.has(id)) seleccionados.delete(id);
     else seleccionados.add(id);
+
     actualizarSeleccionUI();
 }
 
@@ -464,7 +500,7 @@ function crearTarjeta(p) {
 
     return `
         <article class="tarjeta" data-id="${p.id}">
-            <input class="seleccion-check" type="checkbox" aria-label="Seleccionar ${escaparHTML(p.nombre || "peluche")}" ${seleccionados.has(p.id) ? "checked" : ""} onclick="alternarSeleccion('${p.id}',event)">
+            ${modoSeleccion ? `<input class="seleccion-check" type="checkbox" aria-label="Seleccionar ${escaparHTML(p.nombre || "peluche")}" ${seleccionados.has(p.id) ? "checked" : ""} onclick="alternarSeleccion('${p.id}',event)">` : ""}
             <div class="imagen-principal">
                 ${imagen}
                 <span class="badge-estado ${badgeClass}">${estado}</span>
@@ -2316,8 +2352,18 @@ document.getElementById("ordenar")?.addEventListener("change", e => {
 
 document.getElementById("btnSeleccionarTodos")?.addEventListener("click", seleccionarVisibles);
 document.getElementById("btnQuitarSeleccion")?.addEventListener("click", quitarSeleccion);
-document.getElementById("btnImprimirSeleccion")?.addEventListener("click", imprimirEtiquetas);
-document.getElementById("btnImprimir")?.addEventListener("click", imprimirEtiquetas);
+document.getElementById("btnImprimirSeleccion")?.addEventListener("click", () => {
+    if (!seleccionados.size) {
+        alert("Selecciona al menos un peluche para imprimir sus etiquetas.");
+        return;
+    }
+    imprimirEtiquetas();
+    salirModoSeleccion();
+});
+document.getElementById("btnImprimir")?.addEventListener("click", () => {
+    if (modoSeleccion) salirModoSeleccion();
+    else activarModoSeleccion();
+});
 document.getElementById("btnExportar")?.addEventListener("click", exportarRespaldo);
 document.getElementById("btnImportar")?.addEventListener("click", () => document.getElementById("archivoImportar")?.click());
 document.getElementById("archivoImportar")?.addEventListener("change", e => {
@@ -2368,6 +2414,8 @@ window.abrirVisorPorId =
     abrirVisorPorId;
 
 cerrarFormulario();
+modoSeleccion = false;
+actualizarSeleccionUI();
 cargarPeluches();
 
 
@@ -2376,3 +2424,80 @@ document.getElementById("btnSinCodigo")?.addEventListener("click", async () => {
     document.getElementById("etiqueta")?.focus();
 });
 
+
+
+// ===== Menú lateral =====
+const menuLateral = document.getElementById("menuLateral");
+const menuOverlay = document.getElementById("menuOverlay");
+const btnMenu = document.getElementById("btnMenu");
+const cerrarMenuBtn = document.getElementById("cerrarMenu");
+
+function abrirMenu(){
+    if(!menuLateral) return;
+    menuLateral.classList.add("abierto");
+    menuLateral.setAttribute("aria-hidden","false");
+    if(menuOverlay){ menuOverlay.hidden=false; requestAnimationFrame(()=>menuOverlay.classList.add("visible")); }
+    btnMenu?.setAttribute("aria-expanded","true");
+    document.body.classList.add("menu-abierto");
+}
+
+function cerrarMenu(){
+    if(!menuLateral) return;
+    menuLateral.classList.remove("abierto");
+    menuLateral.setAttribute("aria-hidden","true");
+    if(menuOverlay){ menuOverlay.classList.remove("visible"); menuOverlay.hidden=true; }
+    btnMenu?.setAttribute("aria-expanded","false");
+    document.body.classList.remove("menu-abierto");
+}
+
+function irAElemento(id){
+    document.getElementById(id)?.scrollIntoView({behavior:"smooth",block:"start"});
+    cerrarMenu();
+}
+
+btnMenu?.addEventListener("click", abrirMenu);
+cerrarMenuBtn?.addEventListener("click", cerrarMenu);
+menuOverlay?.addEventListener("click", cerrarMenu);
+
+document.querySelectorAll("[data-menu-action]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+        const accion=btn.dataset.menuAction;
+        if(accion==="inicio") irAElemento("seccionResumen");
+        else if(accion==="peluches") irAElemento("seccionPeluches");
+        else if(accion==="nuevo"){ abrirFormulario(); cerrarMenu(); }
+        else if(accion==="escanear"){ abrirScanner(); cerrarMenu(); }
+        else if(accion==="bajo"){
+            filtroActivo="bajo";
+            document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="bajo"));
+            actualizarInterfazBusqueda();
+            irAElemento("seccionPeluches");
+        }
+        else if(accion==="agotado"){
+            filtroActivo="agotado";
+            document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="agotado"));
+            actualizarInterfazBusqueda();
+            irAElemento("seccionPeluches");
+        }
+        else if(accion==="etiquetas"){ if(modoSeleccion) salirModoSeleccion(); else activarModoSeleccion(); cerrarMenu(); }
+        else if(accion==="exportar"){ exportarRespaldo(); cerrarMenu(); }
+        else if(accion==="importar"){ document.getElementById("archivoImportar")?.click(); cerrarMenu(); }
+    });
+});
+
+function actualizarResumenMenu(){
+    const mapa={
+        menuTotalPeluche: peluches.length,
+        menuTotalUnidades: peluches.reduce((s,p)=>s+obtenerCantidad(p),0),
+        menuTotalBajo: peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length,
+        menuTotalAgotados: peluches.filter(p=>estadoPeluche(p)==="Agotado").length
+    };
+    Object.entries(mapa).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+}
+
+// Actualiza los números del menú cada vez que cambia el inventario.
+const actualizarResumenOriginal = actualizarResumen;
+actualizarResumen = function(){ actualizarResumenOriginal(); actualizarResumenMenu(); };
+
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") cerrarMenu(); });
+
+actualizarResumenMenu();
