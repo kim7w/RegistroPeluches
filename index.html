@@ -27,9 +27,11 @@
         <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
         <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
         <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
+        <button type="button" data-menu-action="rapido">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
         <button type="button" data-menu-action="agotado">❌ <span>Agotados</span><b id="menuTotalAgotados">0</b></button>
+        <button type="button" data-menu-action="historial">🕘 <span>Historial de movimientos</span></button>
         <button type="button" data-menu-action="etiquetas">🖨️ <span>Imprimir etiquetas</span></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="exportar">💾 <span>Copia de seguridad</span></button>
@@ -75,6 +77,11 @@
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
     </section>
 
+    <section class="modo-rapido-barra" id="modoRapidoBarra" hidden>
+        <div><strong>⚡ Modo trabajo rápido</strong><small>Usa los botones +1 / −1 directamente en cada tarjeta.</small></div>
+        <button type="button" id="btnSalirModoRapido">Salir</button>
+    </section>
+
     <section class="herramientas-inventario" aria-label="Herramientas del inventario">
         <button type="button" id="btnExportar" class="herramienta">💾 Copia de seguridad</button>
         <button type="button" id="btnImportar" class="herramienta">📥 Importar respaldo</button>
@@ -111,6 +118,8 @@
             <button type="button" class="filtro" data-filtro="disponible">✅ Disponibles</button>
             <button type="button" class="filtro" data-filtro="bajo">⚠️ Bajo</button>
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
+            <button type="button" class="filtro" data-filtro="local">🏪 Con stock local</button>
+            <button type="button" class="filtro" data-filtro="bodega">📦 Con stock bodega</button>
         </div>
 
         <div class="resultado-info">
@@ -222,7 +231,15 @@
             <button type="button" id="detalleEntrada">➕ Entrada</button>
             <button type="button" id="detalleSalida">➖ Salida</button>
             <button type="button" id="detalleEditar">✏️ Editar</button>
+            <button type="button" id="detalleHistorial">🕘 Historial</button>
         </div>
+    </div>
+</div>
+
+<div id="historialModal" class="modal" role="dialog" aria-modal="true" aria-label="Historial de movimientos">
+    <div class="modal-card historial-card">
+        <div class="modal-header"><div><h2>🕘 Historial de movimientos</h2><p id="historialProducto">Producto</p></div><button type="button" id="cerrarHistorial" class="modal-close" aria-label="Cerrar">×</button></div>
+        <div id="historialContenido" class="historial-lista"></div>
     </div>
 </div>
 
