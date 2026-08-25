@@ -45,6 +45,8 @@ let editando = null;
 let filtroActivo = "todos";
 let ordenActivo = "reciente";
 const seleccionados = new Set();
+let modoSeleccion = false;
+let modoRapido = false;
 let detalleId = null;
 
 let visorFotos = [];
@@ -291,7 +293,7 @@ function actualizarSeleccionUI() {
     const toolbar = document.getElementById("seleccionToolbar");
     const count = document.getElementById("seleccionCount");
     if (count) count.textContent = seleccionados.size;
-    if (toolbar) toolbar.hidden = seleccionados.size === 0;
+    if (toolbar) toolbar.hidden = !modoSeleccion;
 
     document.querySelectorAll(".tarjeta[data-id]").forEach(tarjeta => {
         tarjeta.classList.toggle("seleccionada", seleccionados.has(tarjeta.dataset.id));
@@ -464,7 +466,7 @@ function crearTarjeta(p) {
 
     return `
         <article class="tarjeta" data-id="${p.id}">
-            <input class="seleccion-check" type="checkbox" aria-label="Seleccionar ${escaparHTML(p.nombre || "peluche")}" ${seleccionados.has(p.id) ? "checked" : ""} onclick="alternarSeleccion('${p.id}',event)">
+            ${modoSeleccion ? `<input class="seleccion-check" type="checkbox" aria-label="Seleccionar ${escaparHTML(p.nombre || "peluche")}" ${seleccionados.has(p.id) ? "checked" : ""} onclick="alternarSeleccion('${p.id}',event)">` : ""}
             <div class="imagen-principal">
                 ${imagen}
                 <span class="badge-estado ${badgeClass}">${estado}</span>
@@ -544,6 +546,14 @@ function crearTarjeta(p) {
                         : ""
                 }
             </div>
+
+            ${modoRapido ? `
+            <div class="modo-rapido-tarjeta">
+                <button type="button" onclick="movimientoRapido('${p.id}','entrada','local')">🏪 +1</button>
+                <button type="button" onclick="movimientoRapido('${p.id}','salida','local')">🏪 −1</button>
+                <button type="button" onclick="movimientoRapido('${p.id}','entrada','bodega')">📦 +1</button>
+                <button type="button" onclick="movimientoRapido('${p.id}','salida','bodega')">📦 −1</button>
+            </div>` : ""}
 
             <div class="botones">
                 <button
@@ -2371,8 +2381,185 @@ cerrarFormulario();
 cargarPeluches();
 
 
-document.getElementById("btnSinCodigo")?.addEventListener("click", async () => {
-    await asignarCodigoBarrasSinEtiqueta();
-    document.getElementById("etiqueta")?.focus();
+
+
+// ============================================================
+// MENÚ LATERAL + MODO TRABAJO RÁPIDO + SELECCIÓN DE ETIQUETAS
+// ============================================================
+const menuLateral = document.getElementById("menuLateral");
+const menuOverlay = document.getElementById("menuOverlay");
+const btnMenu = document.getElementById("btnMenu");
+const cerrarMenuBtn = document.getElementById("cerrarMenu");
+const modoRapidoBarra = document.getElementById("modoRapidoBarra");
+
+function abrirMenu() {
+    if (!menuLateral) return;
+    menuLateral.classList.add("abierto");
+    menuLateral.setAttribute("aria-hidden", "false");
+    if (menuOverlay) {
+        menuOverlay.hidden = false;
+        requestAnimationFrame(() => menuOverlay.classList.add("visible"));
+    }
+    btnMenu?.setAttribute("aria-expanded", "true");
+    document.body.classList.add("menu-abierto");
+}
+
+function cerrarMenu() {
+    if (!menuLateral) return;
+    menuLateral.classList.remove("abierto");
+    menuLateral.setAttribute("aria-hidden", "true");
+    if (menuOverlay) {
+        menuOverlay.classList.remove("visible");
+        menuOverlay.hidden = true;
+    }
+    btnMenu?.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("menu-abierto");
+}
+
+function irAElemento(id) {
+    document.getElementById(id)?.scrollIntoView({behavior:"smooth", block:"start"});
+    cerrarMenu();
+}
+
+function actualizarEstadoMenu() {
+    const totalP = document.getElementById("menuTotalPeluche");
+    const totalU = document.getElementById("menuTotalUnidades");
+    const bajo = document.getElementById("menuTotalBajo");
+    const agotados = document.getElementById("menuTotalAgotados");
+    if (totalP) totalP.textContent = peluches.length;
+    if (totalU) totalU.textContent = peluches.reduce((s,p)=>s+obtenerCantidad(p),0);
+    if (bajo) bajo.textContent = peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length;
+    if (agotados) agotados.textContent = peluches.filter(p=>estadoPeluche(p)==="Agotado").length;
+    const estado = document.getElementById("menuModoRapido");
+    if (estado) estado.textContent = modoRapido ? "ON" : "OFF";
+}
+
+function activarModoSeleccion() {
+    modoSeleccion = true;
+    document.body.classList.add("modo-seleccion-activo");
+    actualizarSeleccionUI();
+    mostrarPeluches(obtenerFiltrados());
+    document.getElementById("seleccionToolbar")?.scrollIntoView({behavior:"smooth", block:"start"});
+    cerrarMenu();
+}
+
+function salirModoSeleccion() {
+    modoSeleccion = false;
+    seleccionados.clear();
+    document.body.classList.remove("modo-seleccion-activo");
+    actualizarSeleccionUI();
+    mostrarPeluches(obtenerFiltrados());
+}
+
+function alternarModoRapido() {
+    modoRapido = !modoRapido;
+    if (modoRapido) {
+        modoRapidoBarra?.removeAttribute("hidden");
+    } else {
+        modoRapidoBarra?.setAttribute("hidden", "");
+    }
+    document.body.classList.toggle("modo-rapido-activo", modoRapido);
+    actualizarEstadoMenu();
+    actualizarInterfazBusqueda();
+    cerrarMenu();
+}
+
+async function movimientoRapido(id, tipo, destino) {
+    try {
+        await actualizarCantidad(id, tipo, destino, 1);
+    } catch (error) {
+        alert(error?.message || "No se pudo actualizar el inventario.");
+    }
+}
+
+function abrirHistorialProducto(id) {
+    const p = peluches.find(x=>x.id===id);
+    if (!p) return;
+    const modal = document.getElementById("historialModal");
+    const titulo = document.getElementById("historialProducto");
+    const contenido = document.getElementById("historialContenido");
+    if (titulo) titulo.textContent = `${p.nombre || "Peluche"} · ${p.etiqueta || "Sin etiqueta"}`;
+    const movimientos = Array.isArray(p.movimientos) ? [...p.movimientos].reverse() : [];
+    if (contenido) {
+        contenido.innerHTML = movimientos.length ? movimientos.map(m => `
+            <div class="historial-item">
+                <strong>${m.tipo === "entrada" ? "➕ Entrada" : "➖ Salida"}</strong>
+                <span>${m.cantidad} unidad(es) · ${m.destino === "local" ? "🏪 Local" : "📦 Bodega"}</span>
+                <small>${new Date(m.fecha).toLocaleString("es-GT")}</small>
+            </div>
+        `).join("") : `<div class="sin-resultados"><div>🕘</div><p>No hay movimientos registrados.</p></div>`;
+    }
+    modal?.classList.add("abierto");
+}
+
+function abrirHistorialGlobal() {
+    const modal = document.getElementById("historialModal");
+    const titulo = document.getElementById("historialProducto");
+    const contenido = document.getElementById("historialContenido");
+    if (titulo) titulo.textContent = "Todos los movimientos";
+    const movimientos = [];
+    peluches.forEach(p => {
+        (Array.isArray(p.movimientos) ? p.movimientos : []).forEach(m => movimientos.push({p,m}));
+    });
+    movimientos.sort((a,b)=>new Date(b.m.fecha)-new Date(a.m.fecha));
+    if (contenido) {
+        contenido.innerHTML = movimientos.length ? movimientos.slice(0,200).map(({p,m}) => `
+            <div class="historial-item">
+                <strong>${m.tipo === "entrada" ? "➕ Entrada" : "➖ Salida"} · ${escaparHTML(p.nombre || "Peluche")}</strong>
+                <span>${m.cantidad} unidad(es) · ${m.destino === "local" ? "🏪 Local" : "📦 Bodega"}</span>
+                <small>${new Date(m.fecha).toLocaleString("es-GT")}</small>
+            </div>
+        `).join("") : `<div class="sin-resultados"><div>🕘</div><p>No hay movimientos registrados.</p></div>`;
+    }
+    modal?.classList.add("abierto");
+    cerrarMenu();
+}
+
+btnMenu?.addEventListener("click", abrirMenu);
+cerrarMenuBtn?.addEventListener("click", cerrarMenu);
+menuOverlay?.addEventListener("click", cerrarMenu);
+document.getElementById("btnSalirModoRapido")?.addEventListener("click", () => {
+    if (modoRapido) alternarModoRapido();
+});
+document.getElementById("cerrarHistorial")?.addEventListener("click", () => document.getElementById("historialModal")?.classList.remove("abierto"));
+document.getElementById("historialModal")?.addEventListener("click", e => {
+    if (e.target.id === "historialModal") e.currentTarget.classList.remove("abierto");
+});
+document.getElementById("detalleHistorial")?.addEventListener("click", () => {
+    if (detalleId) abrirHistorialProducto(detalleId);
 });
 
+document.querySelectorAll("[data-menu-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const accion = btn.dataset.menuAction;
+        if (accion === "inicio") irAElemento("seccionResumen");
+        else if (accion === "peluches") irAElemento("seccionPeluches");
+        else if (accion === "nuevo") { cancelarEdicion(); abrirFormulario(); cerrarMenu(); }
+        else if (accion === "escanear") { abrirScanner(); cerrarMenu(); }
+        else if (accion === "rapido") alternarModoRapido();
+        else if (accion === "historial") abrirHistorialGlobal();
+        else if (accion === "bajo") { filtroActivo="bajo"; document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="bajo")); actualizarInterfazBusqueda(); cerrarMenu(); }
+        else if (accion === "agotado") { filtroActivo="agotado"; document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="agotado")); actualizarInterfazBusqueda(); cerrarMenu(); }
+        else if (accion === "etiquetas") { modoSeleccion ? salirModoSeleccion() : activarModoSeleccion(); }
+        else if (accion === "exportar") { exportarRespaldo(); cerrarMenu(); }
+        else if (accion === "importar") { document.getElementById("archivoImportar")?.click(); cerrarMenu(); }
+    });
+});
+
+// El botón de etiquetas, si existe en alguna versión anterior del HTML, ahora entra al modo selección.
+document.getElementById("btnImprimir")?.addEventListener("click", () => {
+    modoSeleccion ? salirModoSeleccion() : activarModoSeleccion();
+});
+
+// Recalcula los contadores del menú después de cada cambio de inventario.
+const actualizarResumenBase = actualizarResumen;
+actualizarResumen = function() {
+    actualizarResumenBase();
+    actualizarEstadoMenu();
+};
+
+window.movimientoRapido = movimientoRapido;
+window.abrirHistorialProducto = abrirHistorialProducto;
+
+actualizarEstadoMenu();
+actualizarSeleccionUI();
