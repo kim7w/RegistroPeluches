@@ -46,7 +46,6 @@ let filtroActivo = "todos";
 let ordenActivo = "reciente";
 const seleccionados = new Set();
 let modoSeleccion = false;
-let modoRapido = false;
 let detalleId = null;
 
 let visorFotos = [];
@@ -211,9 +210,6 @@ function coincideFiltro(p) {
         return estadoPeluche(p) === "Agotado";
     }
 
-    if (filtroActivo === "local") return obtenerCantidadLocal(p) > 0;
-    if (filtroActivo === "bodega") return obtenerCantidadBodega(p) > 0;
-
     return clasificarTamano(p.tamano) === filtroActivo;
 }
 
@@ -295,20 +291,55 @@ function actualizarInterfazBusqueda() {
 function actualizarSeleccionUI() {
     const toolbar = document.getElementById("seleccionToolbar");
     const count = document.getElementById("seleccionCount");
+    const btnImprimir = document.getElementById("btnImprimir");
+
     if (count) count.textContent = seleccionados.size;
     if (toolbar) toolbar.hidden = !modoSeleccion;
 
+    if (btnImprimir) {
+        btnImprimir.textContent = modoSeleccion
+            ? "❌ Cancelar selección"
+            : "🖨️ Seleccionar etiquetas";
+    }
+
     document.querySelectorAll(".tarjeta[data-id]").forEach(tarjeta => {
-        tarjeta.classList.toggle("seleccionada", seleccionados.has(tarjeta.dataset.id));
+        tarjeta.classList.toggle(
+            "seleccionada",
+            modoSeleccion && seleccionados.has(tarjeta.dataset.id)
+        );
+
         const check = tarjeta.querySelector(".seleccion-check");
-        if (check) check.checked = seleccionados.has(tarjeta.dataset.id);
+        if (check) {
+            check.checked = seleccionados.has(tarjeta.dataset.id);
+            check.hidden = !modoSeleccion;
+        }
     });
+}
+
+function activarModoSeleccion() {
+    modoSeleccion = true;
+    seleccionados.clear();
+    actualizarSeleccionUI();
+    // Lleva la vista a la zona de productos para que se pueda seleccionar de inmediato.
+    document.getElementById("lista")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+}
+
+function salirModoSeleccion() {
+    modoSeleccion = false;
+    seleccionados.clear();
+    actualizarSeleccionUI();
 }
 
 function alternarSeleccion(id, evento) {
     evento?.stopPropagation();
+    if (!modoSeleccion) return;
+
     if (seleccionados.has(id)) seleccionados.delete(id);
     else seleccionados.add(id);
+
     actualizarSeleccionUI();
 }
 
@@ -550,14 +581,6 @@ function crearTarjeta(p) {
                 }
             </div>
 
-            ${modoRapido ? `
-            <div class="modo-rapido-tarjeta">
-                <button type="button" onclick="movimientoRapido('${p.id}','entrada','local')">🏪 +1</button>
-                <button type="button" onclick="movimientoRapido('${p.id}','salida','local')">🏪 −1</button>
-                <button type="button" onclick="movimientoRapido('${p.id}','entrada','bodega')">📦 +1</button>
-                <button type="button" onclick="movimientoRapido('${p.id}','salida','bodega')">📦 −1</button>
-            </div>` : ""}
-
             <div class="botones">
                 <button
                     class="btn-entrada"
@@ -632,6 +655,7 @@ async function cargarPeluches() {
 
         actualizarResumen();
         actualizarInterfazBusqueda();
+        actualizarMuestraInicio();
 
     } catch (error) {
         console.error("Error cargando inventario:", error);
@@ -812,31 +836,6 @@ async function asignarCodigoBarrasSinEtiqueta() {
 
     campo.value = await generarCodigoBarrasSinEtiqueta();
     campo.dataset.generado = "true";
-}
-
-async function asignarCodigoBarrasSinEtiqueta() {
-    const campo = document.getElementById("etiqueta");
-    if (!campo) return;
-    if (campo.value.trim()) {
-        const reemplazar = confirm("Ya hay un código en Etiqueta / código de barras. ¿Quieres reemplazarlo por un código SIN nuevo?");
-        if (!reemplazar) return;
-    }
-    const boton = document.getElementById("btnSinCodigo");
-    const textoOriginal = boton?.textContent || "➕ Sin código";
-    try {
-        if (boton) { boton.disabled = true; boton.textContent = "⏳ Generando..."; }
-        const codigoNuevo = await generarCodigoBarrasSinEtiqueta();
-        campo.value = codigoNuevo;
-        campo.dataset.generado = "true";
-        campo.dispatchEvent(new Event("input", {bubbles:true}));
-        campo.focus();
-        campo.select();
-    } catch (error) {
-        console.error("Error generando código SIN:", error);
-        alert("No se pudo generar el código. Inténtalo nuevamente.");
-    } finally {
-        if (boton) { boton.disabled = false; boton.textContent = textoOriginal; }
-    }
 }
 
 function abrirFormulario() {
@@ -2077,8 +2076,6 @@ document
         }
     );
 
-document.getElementById("btnSinCodigo")?.addEventListener("click", asignarCodigoBarrasSinEtiqueta);
-
 buscar?.addEventListener(
     "input",
     actualizarInterfazBusqueda
@@ -2318,16 +2315,6 @@ document
 document.addEventListener(
     "keydown",
     e => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
-            e.preventDefault();
-            abrirMenu?.();
-            return;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
-            e.preventDefault();
-            alternarModoRapido();
-            return;
-        }
         if (e.key === "Escape") {
             cerrarVisor();
             cerrarScanner();
@@ -2359,21 +2346,6 @@ document.addEventListener(
 );
 
 
-function activarFiltroDirecto(filtro) {
-    filtroActivo = filtro;
-    document.querySelectorAll(".filtro").forEach(x => x.classList.toggle("activo", x.dataset.filtro === filtro));
-    actualizarInterfazBusqueda();
-}
-
-document.getElementById("btnFiltroLocal")?.addEventListener("click", () => activarFiltroDirecto("local"));
-document.getElementById("btnFiltroBodega")?.addEventListener("click", () => activarFiltroDirecto("bodega"));
-document.getElementById("btnLimpiarFiltros")?.addEventListener("click", () => {
-    filtroActivo = "todos";
-    if (buscar) buscar.value = "";
-    document.querySelectorAll(".filtro").forEach(x => x.classList.toggle("activo", x.dataset.filtro === "todos"));
-    actualizarInterfazBusqueda();
-});
-
 document.getElementById("ordenar")?.addEventListener("change", e => {
     ordenActivo = e.target.value;
     actualizarInterfazBusqueda();
@@ -2381,8 +2353,18 @@ document.getElementById("ordenar")?.addEventListener("change", e => {
 
 document.getElementById("btnSeleccionarTodos")?.addEventListener("click", seleccionarVisibles);
 document.getElementById("btnQuitarSeleccion")?.addEventListener("click", quitarSeleccion);
-document.getElementById("btnImprimirSeleccion")?.addEventListener("click", imprimirEtiquetas);
-document.getElementById("btnImprimir")?.addEventListener("click", imprimirEtiquetas);
+document.getElementById("btnImprimirSeleccion")?.addEventListener("click", () => {
+    if (!seleccionados.size) {
+        alert("Selecciona al menos un peluche para imprimir sus etiquetas.");
+        return;
+    }
+    imprimirEtiquetas();
+    salirModoSeleccion();
+});
+document.getElementById("btnImprimir")?.addEventListener("click", () => {
+    if (modoSeleccion) salirModoSeleccion();
+    else activarModoSeleccion();
+});
 document.getElementById("btnExportar")?.addEventListener("click", exportarRespaldo);
 document.getElementById("btnImportar")?.addEventListener("click", () => document.getElementById("archivoImportar")?.click());
 document.getElementById("archivoImportar")?.addEventListener("change", e => {
@@ -2433,188 +2415,211 @@ window.abrirVisorPorId =
     abrirVisorPorId;
 
 cerrarFormulario();
+modoSeleccion = false;
+actualizarSeleccionUI();
 cargarPeluches();
 
 
+document.getElementById("btnSinCodigo")?.addEventListener("click", async () => {
+    await asignarCodigoBarrasSinEtiqueta();
+    document.getElementById("etiqueta")?.focus();
+});
 
 
-// ============================================================
-// MENÚ LATERAL + MODO TRABAJO RÁPIDO + SELECCIÓN DE ETIQUETAS
-// ============================================================
+
+// ===== Menú lateral =====
 const menuLateral = document.getElementById("menuLateral");
 const menuOverlay = document.getElementById("menuOverlay");
 const btnMenu = document.getElementById("btnMenu");
 const cerrarMenuBtn = document.getElementById("cerrarMenu");
-const modoRapidoBarra = document.getElementById("modoRapidoBarra");
 
-function abrirMenu() {
-    if (!menuLateral) return;
+function abrirMenu(){
+    if(!menuLateral) return;
     menuLateral.classList.add("abierto");
-    menuLateral.setAttribute("aria-hidden", "false");
-    if (menuOverlay) {
-        menuOverlay.hidden = false;
-        requestAnimationFrame(() => menuOverlay.classList.add("visible"));
-    }
-    btnMenu?.setAttribute("aria-expanded", "true");
+    menuLateral.setAttribute("aria-hidden","false");
+    if(menuOverlay){ menuOverlay.hidden=false; requestAnimationFrame(()=>menuOverlay.classList.add("visible")); }
+    btnMenu?.setAttribute("aria-expanded","true");
     document.body.classList.add("menu-abierto");
 }
 
-function cerrarMenu() {
-    if (!menuLateral) return;
+function cerrarMenu(){
+    if(!menuLateral) return;
     menuLateral.classList.remove("abierto");
-    menuLateral.setAttribute("aria-hidden", "true");
-    if (menuOverlay) {
-        menuOverlay.classList.remove("visible");
-        menuOverlay.hidden = true;
-    }
-    btnMenu?.setAttribute("aria-expanded", "false");
+    menuLateral.setAttribute("aria-hidden","true");
+    if(menuOverlay){ menuOverlay.classList.remove("visible"); menuOverlay.hidden=true; }
+    btnMenu?.setAttribute("aria-expanded","false");
     document.body.classList.remove("menu-abierto");
 }
 
-function irAElemento(id) {
-    document.getElementById(id)?.scrollIntoView({behavior:"smooth", block:"start"});
-    cerrarMenu();
-}
-
-function actualizarEstadoMenu() {
-    const totalP = document.getElementById("menuTotalPeluche");
-    const totalU = document.getElementById("menuTotalUnidades");
-    const bajo = document.getElementById("menuTotalBajo");
-    const agotados = document.getElementById("menuTotalAgotados");
-    if (totalP) totalP.textContent = peluches.length;
-    if (totalU) totalU.textContent = peluches.reduce((s,p)=>s+obtenerCantidad(p),0);
-    if (bajo) bajo.textContent = peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length;
-    if (agotados) agotados.textContent = peluches.filter(p=>estadoPeluche(p)==="Agotado").length;
-    const estado = document.getElementById("menuModoRapido");
-    if (estado) estado.textContent = modoRapido ? "ON" : "OFF";
-}
-
-function activarModoSeleccion() {
-    modoSeleccion = true;
-    document.body.classList.add("modo-seleccion-activo");
-    actualizarSeleccionUI();
-    mostrarPeluches(obtenerFiltrados());
-    document.getElementById("seleccionToolbar")?.scrollIntoView({behavior:"smooth", block:"start"});
-    cerrarMenu();
-}
-
-function salirModoSeleccion() {
-    modoSeleccion = false;
-    seleccionados.clear();
-    document.body.classList.remove("modo-seleccion-activo");
-    actualizarSeleccionUI();
-    mostrarPeluches(obtenerFiltrados());
-}
-
-function alternarModoRapido() {
-    modoRapido = !modoRapido;
-    if (modoRapido) {
-        modoRapidoBarra?.removeAttribute("hidden");
-    } else {
-        modoRapidoBarra?.setAttribute("hidden", "");
-    }
-    document.body.classList.toggle("modo-rapido-activo", modoRapido);
-    actualizarEstadoMenu();
-    actualizarInterfazBusqueda();
-    cerrarMenu();
-}
-
-async function movimientoRapido(id, tipo, destino) {
-    try {
-        await actualizarCantidad(id, tipo, destino, 1);
-    } catch (error) {
-        alert(error?.message || "No se pudo actualizar el inventario.");
-    }
-}
-
-function abrirHistorialProducto(id) {
-    const p = peluches.find(x=>x.id===id);
-    if (!p) return;
-    const modal = document.getElementById("historialModal");
-    const titulo = document.getElementById("historialProducto");
-    const contenido = document.getElementById("historialContenido");
-    if (titulo) titulo.textContent = `${p.nombre || "Peluche"} · ${p.etiqueta || "Sin etiqueta"}`;
-    const movimientos = Array.isArray(p.movimientos) ? [...p.movimientos].reverse() : [];
-    if (contenido) {
-        contenido.innerHTML = movimientos.length ? movimientos.map(m => `
-            <div class="historial-item">
-                <strong>${m.tipo === "entrada" ? "➕ Entrada" : "➖ Salida"}</strong>
-                <span>${m.cantidad} unidad(es) · ${m.destino === "local" ? "🏪 Local" : "📦 Bodega"}</span>
-                <small>${new Date(m.fecha).toLocaleString("es-GT")}</small>
-            </div>
-        `).join("") : `<div class="sin-resultados"><div>🕘</div><p>No hay movimientos registrados.</p></div>`;
-    }
-    modal?.classList.add("abierto");
-}
-
-function abrirHistorialGlobal() {
-    const modal = document.getElementById("historialModal");
-    const titulo = document.getElementById("historialProducto");
-    const contenido = document.getElementById("historialContenido");
-    if (titulo) titulo.textContent = "Todos los movimientos";
-    const movimientos = [];
-    peluches.forEach(p => {
-        (Array.isArray(p.movimientos) ? p.movimientos : []).forEach(m => movimientos.push({p,m}));
-    });
-    movimientos.sort((a,b)=>new Date(b.m.fecha)-new Date(a.m.fecha));
-    if (contenido) {
-        contenido.innerHTML = movimientos.length ? movimientos.slice(0,200).map(({p,m}) => `
-            <div class="historial-item">
-                <strong>${m.tipo === "entrada" ? "➕ Entrada" : "➖ Salida"} · ${escaparHTML(p.nombre || "Peluche")}</strong>
-                <span>${m.cantidad} unidad(es) · ${m.destino === "local" ? "🏪 Local" : "📦 Bodega"}</span>
-                <small>${new Date(m.fecha).toLocaleString("es-GT")}</small>
-            </div>
-        `).join("") : `<div class="sin-resultados"><div>🕘</div><p>No hay movimientos registrados.</p></div>`;
-    }
-    modal?.classList.add("abierto");
+function irAElemento(id){
+    document.getElementById(id)?.scrollIntoView({behavior:"smooth",block:"start"});
     cerrarMenu();
 }
 
 btnMenu?.addEventListener("click", abrirMenu);
 cerrarMenuBtn?.addEventListener("click", cerrarMenu);
 menuOverlay?.addEventListener("click", cerrarMenu);
-document.getElementById("btnSalirModoRapido")?.addEventListener("click", () => {
-    if (modoRapido) alternarModoRapido();
-});
-document.getElementById("cerrarHistorial")?.addEventListener("click", () => document.getElementById("historialModal")?.classList.remove("abierto"));
-document.getElementById("historialModal")?.addEventListener("click", e => {
-    if (e.target.id === "historialModal") e.currentTarget.classList.remove("abierto");
-});
-document.getElementById("detalleHistorial")?.addEventListener("click", () => {
-    if (detalleId) abrirHistorialProducto(detalleId);
-});
 
-document.querySelectorAll("[data-menu-action]").forEach(btn => {
-    btn.addEventListener("click", () => {
-        const accion = btn.dataset.menuAction;
-        if (accion === "inicio") irAElemento("seccionResumen");
-        else if (accion === "peluches") irAElemento("seccionPeluches");
-        else if (accion === "nuevo") { cancelarEdicion(); abrirFormulario(); cerrarMenu(); }
-        else if (accion === "escanear") { abrirScanner(); cerrarMenu(); }
-        else if (accion === "rapido") alternarModoRapido();
-        else if (accion === "historial") abrirHistorialGlobal();
-        else if (accion === "bajo") { filtroActivo="bajo"; document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="bajo")); actualizarInterfazBusqueda(); cerrarMenu(); }
-        else if (accion === "agotado") { filtroActivo="agotado"; document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="agotado")); actualizarInterfazBusqueda(); cerrarMenu(); }
-        else if (accion === "etiquetas") { modoSeleccion ? salirModoSeleccion() : activarModoSeleccion(); }
-        else if (accion === "exportar") { exportarRespaldo(); cerrarMenu(); }
-        else if (accion === "importar") { document.getElementById("archivoImportar")?.click(); cerrarMenu(); }
+document.querySelectorAll("[data-menu-action]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+        const accion=btn.dataset.menuAction;
+        if(accion==="inicio") irAElemento("seccionResumen");
+        else if(accion==="peluches") irAElemento("seccionPeluches");
+        else if(accion==="nuevo"){ abrirFormulario(); cerrarMenu(); }
+        else if(accion==="escanear"){ abrirScanner(); cerrarMenu(); }
+        else if(accion==="foto"){ abrirBusquedaFoto(); cerrarMenu(); }
+        else if(accion==="bajo"){
+            filtroActivo="bajo";
+            document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="bajo"));
+            actualizarInterfazBusqueda();
+            irAElemento("seccionPeluches");
+        }
+        else if(accion==="agotado"){
+            filtroActivo="agotado";
+            document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="agotado"));
+            actualizarInterfazBusqueda();
+            irAElemento("seccionPeluches");
+        }
+        else if(accion==="etiquetas"){ if(modoSeleccion) salirModoSeleccion(); else activarModoSeleccion(); cerrarMenu(); }
+        else if(accion==="exportar"){ exportarRespaldo(); cerrarMenu(); }
+        else if(accion==="importar"){ document.getElementById("archivoImportar")?.click(); cerrarMenu(); }
     });
 });
 
-// El botón de etiquetas, si existe en alguna versión anterior del HTML, ahora entra al modo selección.
-document.getElementById("btnImprimir")?.addEventListener("click", () => {
-    modoSeleccion ? salirModoSeleccion() : activarModoSeleccion();
-});
+function actualizarResumenMenu(){
+    const mapa={
+        menuTotalPeluche: peluches.length,
+        menuTotalUnidades: peluches.reduce((s,p)=>s+obtenerCantidad(p),0),
+        menuTotalBajo: peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length,
+        menuTotalAgotados: peluches.filter(p=>estadoPeluche(p)==="Agotado").length
+    };
+    Object.entries(mapa).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+}
 
-// Recalcula los contadores del menú después de cada cambio de inventario.
-const actualizarResumenBase = actualizarResumen;
-actualizarResumen = function() {
-    actualizarResumenBase();
-    actualizarEstadoMenu();
-};
+// Actualiza los números del menú cada vez que cambia el inventario.
+const actualizarResumenOriginal = actualizarResumen;
+actualizarResumen = function(){ actualizarResumenOriginal(); actualizarResumenMenu(); };
 
-window.movimientoRapido = movimientoRapido;
-window.abrirHistorialProducto = abrirHistorialProducto;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") cerrarMenu(); });
 
-actualizarEstadoMenu();
-actualizarSeleccionUI();
+actualizarResumenMenu();
+
+
+// ===== BÚSQUEDA POR FOTO =====
+let modeloVisual = null;
+let fotoBusquedaURL = null;
+
+function obtenerImagenPrincipalPeluche(p){
+    if (typeof obtenerFotos === "function") {
+        return obtenerFotos(p)[0] || "";
+    }
+    return p?.foto || (Array.isArray(p?.fotos) ? p.fotos[0] : "") || "";
+}
+
+function abrirBusquedaFoto(){
+    const modal=document.getElementById("fotoBusquedaModal");
+    if(!modal) return;
+    modal.classList.add("abierto");
+    const estado=document.getElementById("fotoBusquedaEstado");
+    if(estado) estado.textContent="Selecciona una foto o toma una con la cámara.";
+}
+function cerrarBusquedaFoto(){
+    document.getElementById("fotoBusquedaModal")?.classList.remove("abierto");
+    const input=document.getElementById("fotoBusqueda");
+    if(input) input.value="";
+    const resultados=document.getElementById("fotoBusquedaResultados");
+    if(resultados) resultados.innerHTML="";
+    if(fotoBusquedaURL){URL.revokeObjectURL(fotoBusquedaURL);fotoBusquedaURL=null;}
+}
+async function cargarModeloVisual(){
+    if(modeloVisual) return modeloVisual;
+    const estado=document.getElementById("fotoBusquedaEstado");
+    if(estado) estado.textContent="⏳ Preparando búsqueda visual...";
+    if(typeof mobilenet === "undefined") throw new Error("No se pudo cargar el reconocimiento visual.");
+    modeloVisual=await mobilenet.load({version:2,alpha:1.0});
+    return modeloVisual;
+}
+function crearImagenDesdeURL(url){
+    return new Promise((resolve,reject)=>{
+        const img=new Image();
+        img.crossOrigin="anonymous";
+        img.onload=()=>resolve(img);
+        img.onerror=()=>reject(new Error("No se pudo leer una foto del inventario."));
+        img.src=url;
+    });
+}
+async function vectorImagen(modelo,img){
+    const tensor=tf.tidy(()=>{
+        const t=tf.browser.fromPixels(img);
+        return modelo.infer(t,true);
+    });
+    const arr=await tensor.data();
+    tensor.dispose();
+    return Array.from(arr);
+}
+function similitudCoseno(a,b){
+    let dot=0,na=0,nb=0;
+    const n=Math.min(a.length,b.length);
+    for(let i=0;i<n;i++){dot+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i];}
+    return (na&&nb)?dot/(Math.sqrt(na)*Math.sqrt(nb)):0;
+}
+async function buscarPorFoto(file){
+    const estado=document.getElementById("fotoBusquedaEstado");
+    const resultados=document.getElementById("fotoBusquedaResultados");
+    if(!file || !resultados) return;
+    resultados.innerHTML="";
+    if(estado) estado.textContent="⏳ Analizando la foto...";
+    try{
+        const modelo=await cargarModeloVisual();
+        const objetivoURL=URL.createObjectURL(file);
+        const objetivo=await crearImagenDesdeURL(objetivoURL);
+        const vectorObjetivo=await vectorImagen(modelo,objetivo);
+        URL.revokeObjectURL(objetivoURL);
+        const candidatos=[];
+        for(const p of peluches){
+            const url=obtenerImagenPrincipalPeluche(p);
+            if(!url) continue;
+            try{
+                const img=await crearImagenDesdeURL(url);
+                const v=await vectorImagen(modelo,img);
+                const score=similitudCoseno(vectorObjetivo,v);
+                candidatos.push({p,score});
+            }catch(e){ console.warn("No se pudo comparar",p?.id,e); }
+        }
+        candidatos.sort((a,b)=>b.score-a.score);
+        const top=candidatos.slice(0,5);
+        if(!top.length){
+            resultados.innerHTML='<div class="sin-resultados"><div>🧸</div><h3>No hay fotos comparables</h3><p>Agrega fotos claras a tus peluches para usar esta función.</p></div>';
+            if(estado) estado.textContent="No encontramos fotos para comparar.";
+            return;
+        }
+        resultados.innerHTML=top.map(({p,score})=>{
+            const foto=obtenerImagenPrincipalPeluche(p);
+            const porcentaje=Math.max(0,Math.min(100,Math.round(score*100)));
+            return `<button type="button" class="resultado-foto" data-id="${escaparHTML(p.id)}"><img src="${escaparHTML(foto)}" alt=""><span><strong>${escaparHTML(p.nombre||"Peluche")}</strong><small>${escaparHTML(p.codigo||"")} · ${porcentaje}% de similitud</small></span></button>`;
+        }).join("");
+        resultados.querySelectorAll(".resultado-foto").forEach(b=>b.addEventListener("click",()=>{
+            const p=peluches.find(x=>x.id===b.dataset.id);
+            if(p){cerrarBusquedaFoto();abrirDetalle(p.id);}
+        }));
+        if(estado) estado.textContent="Elige el peluche que más se parezca.";
+    }catch(error){
+        console.error("Búsqueda visual:",error);
+        if(estado) estado.textContent="No se pudo realizar la búsqueda visual. Puedes seguir usando el escáner de códigos.";
+    }
+}
+
+document.getElementById("btnBuscarFoto")?.addEventListener("click",abrirBusquedaFoto);
+document.getElementById("cerrarFotoBusqueda")?.addEventListener("click",cerrarBusquedaFoto);
+document.getElementById("fotoBusquedaModal")?.addEventListener("click",e=>{if(e.target.id==="fotoBusquedaModal") cerrarBusquedaFoto();});
+document.getElementById("fotoBusqueda")?.addEventListener("change",e=>{const file=e.target.files?.[0];if(file) buscarPorFoto(file);});
+
+// ===== MUESTRA DE INICIO =====
+function actualizarMuestraInicio(){
+    const cont=document.getElementById("inicioPeluches");
+    if(!cont) return;
+    const primeros=peluches.slice(0,4);
+    cont.innerHTML=primeros.map(p=>crearTarjeta(p)).join("");
+    if(!primeros.length) cont.innerHTML='<div class="sin-resultados"><div>🧸</div><p>Cargando tus peluches...</p></div>';
+}
+document.getElementById("btnVerTodos")?.addEventListener("click",()=>document.getElementById("seccionPeluches")?.scrollIntoView({behavior:"smooth"}));
