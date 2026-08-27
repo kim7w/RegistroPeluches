@@ -1,3 +1,16 @@
+// ===== LIMPIEZA DE VERSIONES ANTERIORES =====
+// Si GitHub/Chrome conserva el HTML viejo encima de la aplicación nueva,
+// se elimina antes de buscar IDs. Esto evita IDs duplicados y botones que no responden.
+const APP_ROOT = document.querySelector(".contenedor");
+if (APP_ROOT) {
+    const hijos = [...document.body.children];
+    for (const hijo of hijos) {
+        if (hijo !== APP_ROOT && !hijo.matches("script")) {
+            hijo.remove();
+        }
+    }
+}
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
     getFirestore,
@@ -812,17 +825,6 @@ async function generarCodigoBarrasSinEtiqueta() {
     }
 
     return `SIN-${String(numero).padStart(5, "0")}`;
-}
-
-async function asignarCodigoBarrasSinEtiqueta() {
-    const campo = document.getElementById("etiqueta");
-    if (!campo) return;
-
-    const actual = campo.value.trim();
-    if (actual) return;
-
-    campo.value = await generarCodigoBarrasSinEtiqueta();
-    campo.dataset.generado = "true";
 }
 
 async function asignarCodigoBarrasSinEtiqueta() {
