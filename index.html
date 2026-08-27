@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260827-08">
+    <link rel="stylesheet" href="style.css?v=20260827-09">
 </head>
 <body>
 <div class="contenedor">
@@ -75,12 +75,21 @@
 
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
+        <button type="button" id="btnBuscarFoto" class="accion-foto">📸 Buscar por foto</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
     </section>
 
     <section class="modo-rapido-barra" id="modoRapidoBarra" hidden>
         <div><strong>⚡ Modo trabajo rápido</strong><small>Usa los botones +1 / −1 directamente en cada tarjeta.</small></div>
         <button type="button" id="btnSalirModoRapido">Salir</button>
+    </section>
+
+    <section class="inicio-peluches" id="inicioPeluches" hidden aria-label="Peluches recientes">
+        <div class="seccion-titulo-inicio">
+            <div><h2>🧸 Peluches recientes</h2><span>Algunos de tus peluches para tenerlos a mano.</span></div>
+            <button type="button" id="btnVerTodosInicio">Ver todos →</button>
+        </div>
+        <div id="listaInicio" class="lista-inicio"></div>
     </section>
 
     <section class="panel-busqueda" id="seccionPeluches">
@@ -309,6 +318,6 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
-<script type="module" src="script.js?v=20260827-07"></script>
+<script type="module" src="script.js?v=20260827-09"></script>
 </body>
 </html>
