@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260825-05">
+    <link rel="stylesheet" href="style.css?v=20260827-08">
 </head>
 <body>
 <div class="contenedor">
@@ -27,7 +27,8 @@
         <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
         <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
         <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
-        <button type="button" id="btnMenuModoRapido" data-menu-action="rapido" aria-pressed="false" onclick="alternarModoRapido()">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
+        <button type="button" data-menu-action="buscarFoto">📸 <span>Buscar por foto</span></button>
+        <button type="button" id="btnMenuModoRapido" data-menu-action="rapido" aria-pressed="false">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
         <button type="button" data-menu-action="agotado">❌ <span>Agotados</span><b id="menuTotalAgotados">0</b></button>
@@ -100,6 +101,25 @@
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
             <button type="button" class="filtro" data-filtro="local">🏪 Con stock local</button>
             <button type="button" class="filtro" data-filtro="bodega">📦 Con stock bodega</button>
+        </div>
+
+        <div class="herramientas-inventario" aria-label="Herramientas de inventario">
+            <button type="button" class="herramienta" id="btnFiltroLocal">🏪 Solo local</button>
+            <button type="button" class="herramienta" id="btnFiltroBodega">📦 Solo bodega</button>
+            <button type="button" class="herramienta" id="btnLimpiarFiltros">🔄 Limpiar filtros</button>
+            <label class="ordenar-control">↕️ Ordenar
+                <select id="ordenar">
+                    <option value="reciente">Más recientes</option>
+                    <option value="nombre">Nombre A-Z</option>
+                    <option value="nombre-desc">Nombre Z-A</option>
+                    <option value="precio">Precio menor → mayor</option>
+                    <option value="precio-desc">Precio mayor → menor</option>
+                    <option value="cantidad">Más unidades</option>
+                    <option value="cantidad-asc">Menos unidades</option>
+                    <option value="bajo">Poco inventario primero</option>
+                    <option value="agotados">Agotados primero</option>
+                </select>
+            </label>
         </div>
 
         <div class="resultado-info">
@@ -261,8 +281,34 @@
     <div id="contadorImagenes" class="contador-imagenes"></div>
 </div>
 
+
+<div id="buscarFotoModal" class="modal" role="dialog" aria-modal="true" aria-label="Buscar peluche por foto">
+    <div class="modal-card foto-busqueda-card">
+        <div class="modal-header">
+            <div>
+                <h2>📸 Buscar por foto</h2>
+                <p>Toma una foto o elige una imagen para encontrar el peluche más parecido.</p>
+            </div>
+            <button type="button" id="cerrarBuscarFoto" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <div class="foto-busqueda-controles">
+            <button type="button" id="btnTomarFoto">📷 Tomar foto</button>
+            <button type="button" id="btnElegirFoto">🖼️ Elegir imagen</button>
+            <input type="file" id="archivoBuscarFoto" accept="image/*" capture="environment" hidden>
+        </div>
+        <div id="fotoBusquedaVista" class="foto-busqueda-vista" hidden>
+            <img id="fotoBusquedaPreview" alt="Foto para búsqueda">
+        </div>
+        <div id="fotoBusquedaEstado" class="scanner-estado">La búsqueda visual compara la foto con las fotos guardadas de tus peluches.</div>
+        <div id="fotoBusquedaResultados" class="foto-busqueda-resultados"></div>
+    </div>
+</div>
+
+<input type="file" id="archivoImportar" accept="application/json,.json" hidden>
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script type="module" src="script.js?v=20260825-05"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+<script type="module" src="script.js?v=20260827-07"></script>
 </body>
 </html>
