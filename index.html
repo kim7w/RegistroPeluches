@@ -4,12 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#8b5cf6">
-    <meta name="app-build" content="2026-08-27-final-legacy-cleanup">
     <title>Registro de Peluches de Kim 💜</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260827-11">
+    <link rel="stylesheet" href="style.css?v=20260825-05">
 </head>
 <body>
 <div class="contenedor">
@@ -28,8 +27,8 @@
         <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
         <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
         <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
-        <button type="button" data-menu-action="buscarFoto">📸 <span>Buscar por foto</span></button>
-        <button type="button" id="btnMenuModoRapido" data-menu-action="rapido" aria-pressed="false">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
+        <button type="button" data-menu-action="foto">📸 <span>Buscar por foto</span></button>
+        <button type="button" id="btnMenuModoRapido" data-menu-action="rapido" aria-pressed="false" onclick="alternarModoRapido()">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
         <button type="button" data-menu-action="agotado">❌ <span>Agotados</span><b id="menuTotalAgotados">0</b></button>
@@ -76,16 +75,14 @@
 
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
-        <button type="button" id="btnBuscarFoto" class="accion-foto">📸 Buscar por foto</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
+        <button type="button" id="btnBuscarFoto" class="accion-foto">📸 Buscar por foto</button>
     </section>
 
     <section class="modo-rapido-barra" id="modoRapidoBarra" hidden>
         <div><strong>⚡ Modo trabajo rápido</strong><small>Usa los botones +1 / −1 directamente en cada tarjeta.</small></div>
         <button type="button" id="btnSalirModoRapido">Salir</button>
     </section>
-
-
 
     <section class="panel-busqueda" id="seccionPeluches">
         <div class="buscador-wrap">
@@ -105,25 +102,6 @@
             <button type="button" class="filtro" data-filtro="agotado">❌ Agotados</button>
             <button type="button" class="filtro" data-filtro="local">🏪 Con stock local</button>
             <button type="button" class="filtro" data-filtro="bodega">📦 Con stock bodega</button>
-        </div>
-
-        <div class="herramientas-inventario" aria-label="Herramientas de inventario">
-            <button type="button" class="herramienta" id="btnFiltroLocal">🏪 Solo local</button>
-            <button type="button" class="herramienta" id="btnFiltroBodega">📦 Solo bodega</button>
-            <button type="button" class="herramienta" id="btnLimpiarFiltros">🔄 Limpiar filtros</button>
-            <label class="ordenar-control">↕️ Ordenar
-                <select id="ordenar">
-                    <option value="reciente">Más recientes</option>
-                    <option value="nombre">Nombre A-Z</option>
-                    <option value="nombre-desc">Nombre Z-A</option>
-                    <option value="precio">Precio menor → mayor</option>
-                    <option value="precio-desc">Precio mayor → menor</option>
-                    <option value="cantidad">Más unidades</option>
-                    <option value="cantidad-asc">Menos unidades</option>
-                    <option value="bajo">Poco inventario primero</option>
-                    <option value="agotados">Agotados primero</option>
-                </select>
-            </label>
         </div>
 
         <div class="resultado-info">
@@ -206,6 +184,25 @@
     </div>
 </div>
 
+<div id="fotoBusquedaModal" class="modal" role="dialog" aria-modal="true" aria-label="Buscar por foto">
+    <div class="modal-card foto-busqueda-card">
+        <div class="modal-header">
+            <div>
+                <h2>📸 Buscar por foto</h2>
+                <p>Elige o toma una foto del peluche. La búsqueda se hace de forma local.</p>
+            </div>
+            <button type="button" id="cerrarFotoBusqueda" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <label class="foto-busqueda-selector">
+            <span>📷 Seleccionar / tomar foto</span>
+            <input type="file" id="fotoBusquedaInput" accept="image/*" capture="environment">
+        </label>
+        <div id="fotoBusquedaEstado" class="foto-busqueda-estado">Selecciona una foto para comenzar.</div>
+        <div id="fotoBusquedaPreview" class="foto-busqueda-preview" hidden></div>
+        <div id="fotoBusquedaResultados" class="foto-busqueda-resultados"></div>
+    </div>
+</div>
+
 <div id="scannerModal" class="modal" role="dialog" aria-modal="true" aria-label="Escanear código de barras">
     <div class="modal-card">
         <div class="modal-header">
@@ -285,32 +282,8 @@
     <div id="contadorImagenes" class="contador-imagenes"></div>
 </div>
 
-
-<div id="buscarFotoModal" class="modal" role="dialog" aria-modal="true" aria-label="Buscar peluche por foto">
-    <div class="modal-card foto-busqueda-card">
-        <div class="modal-header">
-            <div>
-                <h2>📸 Buscar por foto</h2>
-                <p>Toma una foto o elige una imagen para encontrar el peluche más parecido.</p>
-            </div>
-            <button type="button" id="cerrarBuscarFoto" class="modal-close" aria-label="Cerrar">×</button>
-        </div>
-        <div class="foto-busqueda-controles">
-            <button type="button" id="btnTomarFoto">📷 Tomar foto</button>
-            <button type="button" id="btnElegirFoto">🖼️ Elegir imagen</button>
-            <input type="file" id="archivoBuscarFoto" accept="image/*" capture="environment" hidden>
-        </div>
-        <div id="fotoBusquedaVista" class="foto-busqueda-vista" hidden>
-            <img id="fotoBusquedaPreview" alt="Foto para búsqueda">
-        </div>
-        <div id="fotoBusquedaEstado" class="scanner-estado">La búsqueda visual compara la foto con las fotos guardadas de tus peluches.</div>
-        <div id="fotoBusquedaResultados" class="foto-busqueda-resultados"></div>
-    </div>
-</div>
-
-<input type="file" id="archivoImportar" accept="application/json,.json" hidden>
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script type="module" src="script.js?v=20260827-11"></script>
+<script type="module" src="script.js?v=20260827-final"></script>
 </body>
 </html>
