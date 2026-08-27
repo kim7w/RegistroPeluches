@@ -1,29 +1,13 @@
-// ===== LIMPIEZA DE VERSIONES ANTERIORES =====
-// Si GitHub/Chrome conserva el HTML viejo encima de la aplicación nueva,
-// se elimina antes de buscar IDs. Esto evita IDs duplicados y botones que no responden.
-const APP_ROOT = document.querySelector(".contenedor");
-if (APP_ROOT) {
-    const hijos = [...document.body.children];
-    for (const hijo of hijos) {
-        if (hijo !== APP_ROOT && !hijo.matches("script")) {
-            hijo.remove();
-        }
-    }
-}
-
-// Firebase se carga de forma dinámica para que, si el CDN tarda o falla,
-// la interfaz y sus botones sigan funcionando y podamos mostrar el error real.
-let initializeApp = null;
-let getFirestore = null;
-let collection = null;
-let addDoc = null;
-let getDocs = null;
-let deleteDoc = null;
-let doc = null;
-let updateDoc = null;
-let db = null;
-let firebaseListo = false;
-let firebaseCargando = null;
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+    getFirestore,
+    collection,
+    addDoc,
+    getDocs,
+    deleteDoc,
+    doc,
+    updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCZIgfuXyL6_AZxPjbir7j7LIDxi3k5Xo",
@@ -35,39 +19,8 @@ const firebaseConfig = {
     measurementId: "G-VZ537J3Q3E"
 };
 
-async function iniciarFirebase() {
-    if (firebaseListo) return true;
-    if (firebaseCargando) return firebaseCargando;
-
-    firebaseCargando = (async () => {
-        try {
-            const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-            const fsMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-
-            initializeApp = appMod.initializeApp;
-            getFirestore = fsMod.getFirestore;
-            collection = fsMod.collection;
-            addDoc = fsMod.addDoc;
-            getDocs = fsMod.getDocs;
-            deleteDoc = fsMod.deleteDoc;
-            doc = fsMod.doc;
-            updateDoc = fsMod.updateDoc;
-
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            firebaseListo = true;
-            return true;
-        } catch (error) {
-            console.error("Firebase no pudo iniciarse:", error);
-            firebaseListo = false;
-            throw error;
-        } finally {
-            firebaseCargando = null;
-        }
-    })();
-
-    return firebaseCargando;
-}
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const CLOUDINARY_UPLOAD = "https://api.cloudinary.com/v1_1/vspx5rke/image/upload";
 const CLOUDINARY_PRESET = "peluches";
@@ -257,9 +210,6 @@ function coincideFiltro(p) {
     if (filtroActivo === "agotado") {
         return estadoPeluche(p) === "Agotado";
     }
-
-    if (filtroActivo === "local") return obtenerCantidadLocal(p) > 0;
-    if (filtroActivo === "bodega") return obtenerCantidadBodega(p) > 0;
 
     return clasificarTamano(p.tamano) === filtroActivo;
 }
@@ -653,20 +603,8 @@ function mostrarPeluches(datos) {
     actualizarSeleccionUI();
 }
 
-function mostrarPeluchesInicio(datos) {
-    const contenedor = document.getElementById("listaInicio");
-    const seccion = document.getElementById("inicioPeluches");
-    if (!contenedor || !seccion) return;
-
-    const destacados = datos.slice(0, 4);
-    contenedor.innerHTML = destacados.map(crearTarjeta).join("");
-    seccion.hidden = !destacados.length;
-}
-
 async function cargarPeluches() {
     try {
-        await iniciarFirebase();
-
         if (lista) {
             lista.innerHTML = `
                 <div class="sin-resultados">
@@ -691,12 +629,19 @@ async function cargarPeluches() {
 
         actualizarResumen();
         actualizarInterfazBusqueda();
-        // No mostrar peluches automáticamente en Inicio; solo aparecen al entrar a Ver peluches.
 
     } catch (error) {
         console.error("Error cargando inventario:", error);
 
-        mostrarErrorFirebase(error);
+        if (lista) {
+            lista.innerHTML = `
+                <div class="sin-resultados">
+                    <div>⚠️</div>
+                    <h3>No se pudo cargar el inventario</h3>
+                    <p>Revisa tu conexión e inténtalo de nuevo.</p>
+                </div>
+            `;
+        }
     }
 }
 
@@ -858,26 +803,12 @@ async function generarCodigoBarrasSinEtiqueta() {
 async function asignarCodigoBarrasSinEtiqueta() {
     const campo = document.getElementById("etiqueta");
     if (!campo) return;
-    if (campo.value.trim()) {
-        const reemplazar = confirm("Ya hay un código en Etiqueta / código de barras. ¿Quieres reemplazarlo por un código SIN nuevo?");
-        if (!reemplazar) return;
-    }
-    const boton = document.getElementById("btnSinCodigo");
-    const textoOriginal = boton?.textContent || "➕ Sin código";
-    try {
-        if (boton) { boton.disabled = true; boton.textContent = "⏳ Generando..."; }
-        const codigoNuevo = await generarCodigoBarrasSinEtiqueta();
-        campo.value = codigoNuevo;
-        campo.dataset.generado = "true";
-        campo.dispatchEvent(new Event("input", {bubbles:true}));
-        campo.focus();
-        campo.select();
-    } catch (error) {
-        console.error("Error generando código SIN:", error);
-        alert("No se pudo generar el código. Inténtalo nuevamente.");
-    } finally {
-        if (boton) { boton.disabled = false; boton.textContent = textoOriginal; }
-    }
+
+    const actual = campo.value.trim();
+    if (actual) return;
+
+    campo.value = await generarCodigoBarrasSinEtiqueta();
+    campo.dataset.generado = "true";
 }
 
 function abrirFormulario() {
@@ -2118,8 +2049,6 @@ document
         }
     );
 
-document.getElementById("btnSinCodigo")?.addEventListener("click", asignarCodigoBarrasSinEtiqueta);
-
 buscar?.addEventListener(
     "input",
     actualizarInterfazBusqueda
@@ -2359,16 +2288,6 @@ document
 document.addEventListener(
     "keydown",
     e => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
-            e.preventDefault();
-            abrirMenu?.();
-            return;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
-            e.preventDefault();
-            alternarModoRapido();
-            return;
-        }
         if (e.key === "Escape") {
             cerrarVisor();
             cerrarScanner();
@@ -2399,21 +2318,6 @@ document.addEventListener(
     }
 );
 
-
-function activarFiltroDirecto(filtro) {
-    filtroActivo = filtro;
-    document.querySelectorAll(".filtro").forEach(x => x.classList.toggle("activo", x.dataset.filtro === filtro));
-    actualizarInterfazBusqueda();
-}
-
-document.getElementById("btnFiltroLocal")?.addEventListener("click", () => activarFiltroDirecto("local"));
-document.getElementById("btnFiltroBodega")?.addEventListener("click", () => activarFiltroDirecto("bodega"));
-document.getElementById("btnLimpiarFiltros")?.addEventListener("click", () => {
-    filtroActivo = "todos";
-    if (buscar) buscar.value = "";
-    document.querySelectorAll(".filtro").forEach(x => x.classList.toggle("activo", x.dataset.filtro === "todos"));
-    actualizarInterfazBusqueda();
-});
 
 document.getElementById("ordenar")?.addEventListener("change", e => {
     ordenActivo = e.target.value;
@@ -2474,25 +2378,10 @@ window.abrirVisorPorId =
     abrirVisorPorId;
 
 cerrarFormulario();
+cargarPeluches();
 
 
 
-
-// Si Firebase tarda, no bloqueamos la interfaz. Los botones siguen respondiendo.
-function mostrarErrorFirebase(error) {
-    const listaLocal = document.getElementById("lista");
-    if (!listaLocal) return;
-    const mensaje = error?.message || "No se pudo conectar con Firebase.";
-    listaLocal.innerHTML = `
-        <div class="sin-resultados">
-            <div>⚠️</div>
-            <h3>No se pudo cargar el inventario</h3>
-            <p>La aplicación sí abrió, pero no pudo conectar con la base de datos.</p>
-            <button type="button" id="btnReintentarFirebase" class="accion-secundaria">🔄 Reintentar</button>
-        </div>`;
-    document.getElementById("btnReintentarFirebase")?.addEventListener("click", () => cargarPeluches());
-    console.error("Detalle Firebase:", mensaje);
-}
 
 // ============================================================
 // MENÚ LATERAL + MODO TRABAJO RÁPIDO + SELECCIÓN DE ETIQUETAS
@@ -2626,281 +2515,6 @@ function abrirHistorialGlobal() {
     cerrarMenu();
 }
 
-
-// ==================== BÚSQUEDA VISUAL POR FOTO ====================
-// Versión rápida: el modelo visual se carga SOLO cuando se usa esta función,
-// las imágenes se reducen y se analizan por lotes. Los vectores quedan en
-// memoria para que las búsquedas siguientes sean mucho más rápidas.
-let modeloVisual = null;
-let fotoBusquedaEnCurso = false;
-const cacheVisual = new Map();
-const TAMANO_VISUAL = 224;
-const LOTE_VISUAL = 12;
-
-function cargarScriptExterno(src, id) {
-    return new Promise((resolve, reject) => {
-        if (id && document.getElementById(id)) {
-            const existente = document.getElementById(id);
-            if (existente.dataset.cargado === "true") return resolve();
-            existente.addEventListener("load", () => resolve(), {once:true});
-            existente.addEventListener("error", () => reject(new Error(`No se pudo cargar ${src}`)), {once:true});
-            return;
-        }
-        const script = document.createElement("script");
-        if (id) script.id = id;
-        script.src = src;
-        script.async = true;
-        script.onload = () => { script.dataset.cargado = "true"; resolve(); };
-        script.onerror = () => reject(new Error(`No se pudo cargar el módulo visual.`));
-        document.head.appendChild(script);
-    });
-}
-
-function cerrarBuscadorFoto() {
-    document.getElementById("buscarFotoModal")?.classList.remove("abierto");
-    const input = document.getElementById("archivoBuscarFoto");
-    if (input) input.value = "";
-    const preview = document.getElementById("fotoBusquedaPreview");
-    if (preview) preview.removeAttribute("src");
-    document.getElementById("fotoBusquedaVista")?.setAttribute("hidden", "");
-    const resultados = document.getElementById("fotoBusquedaResultados");
-    if (resultados) resultados.innerHTML = "";
-}
-
-async function cargarModeloVisual() {
-    if (modeloVisual) return modeloVisual;
-
-    const estado = document.getElementById("fotoBusquedaEstado");
-    if (estado) estado.textContent = "⏳ Preparando búsqueda visual (solo la primera vez)...";
-
-    if (!window.tf) {
-        await cargarScriptExterno("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js", "tfjsVisual");
-    }
-    if (!window.mobilenet) {
-        await cargarScriptExterno("https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js", "mobilenetVisual");
-    }
-
-    modeloVisual = await window.mobilenet.load({version:2, alpha:0.5});
-    return modeloVisual;
-}
-
-function vectorNorm(v) {
-    let suma = 0;
-    for (const x of v) suma += x * x;
-    return Math.sqrt(suma) || 1;
-}
-
-function similitudCoseno(a, b) {
-    let producto = 0;
-    const n = Math.min(a.length, b.length);
-    for (let i = 0; i < n; i++) producto += a[i] * b[i];
-    return producto / (vectorNorm(a) * vectorNorm(b));
-}
-
-function imagenDesdeUrl(url) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.decoding = "async";
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error("No se pudo cargar una foto."));
-        img.src = url;
-    });
-}
-
-function lienzoVisual(img) {
-    const canvas = document.createElement("canvas");
-    canvas.width = TAMANO_VISUAL;
-    canvas.height = TAMANO_VISUAL;
-    const ctx = canvas.getContext("2d", {willReadFrequently:false});
-    if (!ctx) throw new Error("No se pudo preparar la imagen.");
-
-    const lado = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height) || 1;
-    const sx = Math.max(0, ((img.naturalWidth || img.width) - lado) / 2);
-    const sy = Math.max(0, ((img.naturalHeight || img.height) - lado) / 2);
-    ctx.drawImage(img, sx, sy, lado, lado, 0, 0, TAMANO_VISUAL, TAMANO_VISUAL);
-    return canvas;
-}
-
-async function obtenerVectorVisual(img, modelo) {
-    const canvas = lienzoVisual(img);
-    const tensor = window.tf.browser.fromPixels(canvas);
-    const resultado = await window.tf.tidy(() => {
-        const embedding = modelo.infer(tensor, true);
-        return Array.from(embedding.dataSync());
-    });
-    tensor.dispose();
-    return resultado;
-}
-
-async function obtenerVectoresVisualLote(items, modelo) {
-    const tensors = items.map(item => window.tf.browser.fromPixels(lienzoVisual(item.img)));
-    const lote = window.tf.stack(tensors);
-    tensors.forEach(t => t.dispose());
-
-    const resultado = await window.tf.tidy(() => {
-        const embedding = modelo.infer(lote, true);
-        return Array.from(embedding.arraySync());
-    });
-
-    lote.dispose();
-    return resultado;
-}
-
-async function obtenerVectorCacheado(p, modelo) {
-    const url = obtenerFotos(p)[0] || "";
-    if (!url) return null;
-    if (cacheVisual.has(url)) return cacheVisual.get(url);
-
-    const img = await imagenDesdeUrl(url);
-    const vector = await obtenerVectorVisual(img, modelo);
-    cacheVisual.set(url, vector);
-    return vector;
-}
-
-async function abrirBuscadorFoto() {
-    cerrarMenu();
-    document.getElementById("buscarFotoModal")?.classList.add("abierto");
-    const estado = document.getElementById("fotoBusquedaEstado");
-    if (estado) estado.textContent = "Listo. Toma una foto o elige una imagen.";
-}
-
-async function procesarBusquedaFoto(file) {
-    if (!file || fotoBusquedaEnCurso) return;
-    fotoBusquedaEnCurso = true;
-
-    const estado = document.getElementById("fotoBusquedaEstado");
-    const resultadosEl = document.getElementById("fotoBusquedaResultados");
-    const vista = document.getElementById("fotoBusquedaVista");
-    const preview = document.getElementById("fotoBusquedaPreview");
-
-    try {
-        if (estado) estado.textContent = "⏳ Preparando la foto...";
-        if (resultadosEl) resultadosEl.innerHTML = "";
-
-        const objectUrl = URL.createObjectURL(file);
-        if (preview) {
-            preview.src = objectUrl;
-            vista?.removeAttribute("hidden");
-        }
-
-        const imgConsulta = await imagenDesdeUrl(objectUrl);
-        const modelo = await cargarModeloVisual();
-        if (estado) estado.textContent = "🔎 Buscando entre tus peluches...";
-
-        const consulta = await obtenerVectorVisual(imgConsulta, modelo);
-        const candidatos = [];
-        const pendientes = [];
-
-        // Solo usamos la foto principal para la primera pasada: esto evita
-        // analizar 3-4 fotos por cada producto y hace la búsqueda mucho más rápida.
-        for (const p of peluches) {
-            const url = obtenerFotos(p)[0] || "";
-            if (!url) continue;
-
-            if (cacheVisual.has(url)) {
-                candidatos.push({p, score:similitudCoseno(consulta, cacheVisual.get(url))});
-            } else {
-                pendientes.push({p, url});
-            }
-        }
-
-        // Procesamiento por lotes para no ejecutar MobileNet una vez por foto.
-        for (let i = 0; i < pendientes.length; i += LOTE_VISUAL) {
-            const loteDatos = pendientes.slice(i, i + LOTE_VISUAL);
-            const cargadas = [];
-
-            await Promise.all(loteDatos.map(async item => {
-                try {
-                    cargadas.push({p:item.p, url:item.url, img:await imagenDesdeUrl(item.url)});
-                } catch (e) {
-                    console.warn("No se pudo cargar foto visual:", e);
-                }
-            }));
-
-            if (!cargadas.length) continue;
-
-            const vectores = await obtenerVectoresVisualLote(cargadas, modelo);
-            vectores.forEach((vector, indice) => {
-                const item = cargadas[indice];
-                cacheVisual.set(item.url, vector);
-                candidatos.push({p:item.p, score:similitudCoseno(consulta, vector)});
-            });
-
-            if (estado) {
-                const procesadas = Math.min(i + LOTE_VISUAL, pendientes.length);
-                estado.textContent = `🔎 Buscando... ${procesadas}/${pendientes.length} fotos`;
-            }
-        }
-
-        URL.revokeObjectURL(objectUrl);
-
-        candidatos.sort((a,b) => b.score - a.score);
-        const top = candidatos.slice(0,5);
-
-        if (!top.length) {
-            if (estado) estado.textContent = "No hay peluches con fotos para comparar.";
-            return;
-        }
-
-        if (estado) estado.textContent = `✨ Encontré ${top.length} coincidencia${top.length === 1 ? "" : "s"}.`;
-
-        resultadosEl.innerHTML = top.map(({p,score}) => {
-            const foto = obtenerFotos(p)[0] || "";
-            const porcentaje = Math.max(0, Math.min(100, Math.round(score * 100)));
-            return `
-                <button type="button" class="resultado-foto" data-foto-id="${escaparHTML(p.id)}">
-                    <img src="${escaparHTML(foto)}" alt="" loading="lazy">
-                    <span class="resultado-foto-info">
-                        <strong>${escaparHTML(p.nombre || "Peluche sin nombre")}</strong>
-                        <small>${escaparHTML(p.codigo || p.codigoInterno || "Sin código interno")}</small>
-                        <b>${porcentaje}% de similitud</b>
-                    </span>
-                </button>`;
-        }).join("");
-
-        resultadosEl.querySelectorAll("[data-foto-id]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const id = btn.dataset.fotoId;
-                cerrarBuscadorFoto();
-                abrirDetalle(id);
-            });
-        });
-    } catch (error) {
-        console.error("Búsqueda visual:", error);
-        if (estado) estado.textContent = "❌ No pude realizar la búsqueda visual. Puedes seguir usando el código de barras.";
-    } finally {
-        fotoBusquedaEnCurso = false;
-    }
-}
-
-document.getElementById("btnBuscarFoto")?.addEventListener("click", abrirBuscadorFoto);
-document.getElementById("btnVerTodosInicio")?.addEventListener("click", () => {
-    document.getElementById("seccionPeluches")?.scrollIntoView({behavior:"smooth", block:"start"});
-});
-
-document.getElementById("btnTomarFoto")?.addEventListener("click", () => {
-    const input = document.getElementById("archivoBuscarFoto");
-    if (input) {
-        input.setAttribute("capture", "environment");
-        input.click();
-    }
-});
-document.getElementById("btnElegirFoto")?.addEventListener("click", () => {
-    const input = document.getElementById("archivoBuscarFoto");
-    if (input) {
-        input.removeAttribute("capture");
-        input.click();
-    }
-});
-document.getElementById("archivoBuscarFoto")?.addEventListener("change", e => {
-    procesarBusquedaFoto(e.target.files?.[0]);
-});
-document.getElementById("cerrarBuscarFoto")?.addEventListener("click", cerrarBuscadorFoto);
-document.getElementById("buscarFotoModal")?.addEventListener("click", e => {
-    if (e.target.id === "buscarFotoModal") cerrarBuscadorFoto();
-});
-
 btnMenu?.addEventListener("click", abrirMenu);
 cerrarMenuBtn?.addEventListener("click", cerrarMenu);
 menuOverlay?.addEventListener("click", cerrarMenu);
@@ -2922,7 +2536,6 @@ document.querySelectorAll("[data-menu-action]").forEach(btn => {
         else if (accion === "peluches") irAElemento("seccionPeluches");
         else if (accion === "nuevo") { cancelarEdicion(); abrirFormulario(); cerrarMenu(); }
         else if (accion === "escanear") { abrirScanner(); cerrarMenu(); }
-        else if (accion === "buscarFoto") { abrirBuscadorFoto(); }
         else if (accion === "rapido") alternarModoRapido();
         else if (accion === "historial") abrirHistorialGlobal();
         else if (accion === "bajo") { filtroActivo="bajo"; document.querySelectorAll(".filtro").forEach(x=>x.classList.toggle("activo",x.dataset.filtro==="bajo")); actualizarInterfazBusqueda(); cerrarMenu(); }
@@ -2943,7 +2556,6 @@ const actualizarResumenBase = actualizarResumen;
 actualizarResumen = function() {
     actualizarResumenBase();
     actualizarEstadoMenu();
-    // No mostrar peluches automáticamente en Inicio; solo aparecen al entrar a Ver peluches.
 };
 
 window.movimientoRapido = movimientoRapido;
@@ -2952,8 +2564,277 @@ window.abrirHistorialProducto = abrirHistorialProducto;
 actualizarEstadoMenu();
 actualizarSeleccionUI();
 
+// ============================================================
+// CÓDIGO DE BARRAS: BOTÓN "SIN CÓDIGO" SIEMPRE DISPONIBLE
+// ============================================================
+document.getElementById("btnSinCodigo")?.addEventListener("click", async () => {
+    const campo = document.getElementById("etiqueta");
+    if (!campo) return;
 
-// Arranque final: todos los botones y menús ya están preparados antes de consultar Firestore.
-modoSeleccion = false;
-actualizarSeleccionUI();
-cargarPeluches();
+    if (!campo.value.trim()) {
+        campo.value = await generarCodigoBarrasSinEtiqueta();
+        campo.dataset.generado = "true";
+    }
+
+    campo.focus();
+    campo.select();
+});
+
+// ============================================================
+// BÚSQUEDA VISUAL RÁPIDA
+// Compara una foto con las fotos principales ya registradas.
+// No usa IA externa: trabaja con una firma pequeña de imagen y
+// guarda las firmas en el navegador para que las siguientes
+// búsquedas sean mucho más rápidas.
+// ============================================================
+const VISUAL_CACHE_KEY = "registroPeluchesVisualCacheV1";
+const VISUAL_SIZE = 24;
+const VISUAL_MAX_RESULTADOS = 8;
+let fotoBusquedaEnCurso = false;
+let visualCache = null;
+
+function cargarCacheVisual() {
+    if (visualCache) return visualCache;
+    try {
+        visualCache = JSON.parse(localStorage.getItem(VISUAL_CACHE_KEY) || "{}") || {};
+    } catch (_) {
+        visualCache = {};
+    }
+    return visualCache;
+}
+
+function guardarCacheVisual() {
+    try {
+        localStorage.setItem(VISUAL_CACHE_KEY, JSON.stringify(visualCache || {}));
+    } catch (_) {
+        // Si el almacenamiento está lleno, la búsqueda sigue funcionando sin caché.
+    }
+}
+
+function urlMiniaturaVisual(url) {
+    if (!url) return "";
+    // Cloudinary: pedimos una miniatura pequeña para no descargar las fotos grandes.
+    if (url.includes("res.cloudinary.com/") && url.includes("/image/upload/")) {
+        return url.replace("/image/upload/", "/image/upload/w_160,h_160,c_fill,q_auto,f_auto/");
+    }
+    return url;
+}
+
+function cargarImagenVisual(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.decoding = "async";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("No se pudo cargar la imagen."));
+        img.src = urlMiniaturaVisual(url);
+    });
+}
+
+function firmaImagen(img) {
+    const canvas = document.createElement("canvas");
+    canvas.width = VISUAL_SIZE;
+    canvas.height = VISUAL_SIZE;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, VISUAL_SIZE, VISUAL_SIZE);
+
+    const data = ctx.getImageData(0, 0, VISUAL_SIZE, VISUAL_SIZE).data;
+    const hist = new Array(32).fill(0);
+    const gris = [];
+    let sr = 0, sg = 0, sb = 0;
+    const totalPix = VISUAL_SIZE * VISUAL_SIZE;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i] / 255;
+        const g = data[i + 1] / 255;
+        const b = data[i + 2] / 255;
+        sr += r; sg += g; sb += b;
+        const y = 0.299 * r + 0.587 * g + 0.114 * b;
+        gris.push(y);
+        const ri = Math.min(3, Math.floor(r * 4));
+        const gi = Math.min(3, Math.floor(g * 4));
+        const bi = Math.min(1, Math.floor(b * 2));
+        hist[(ri * 4 + gi) * 2 + bi]++;
+    }
+
+    for (let i = 0; i < hist.length; i++) hist[i] /= totalPix;
+
+    // Miniatura en escala de grises para captar forma/silueta además del color.
+    const small = [];
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            let suma = 0;
+            for (let yy = 0; yy < 3; yy++) {
+                for (let xx = 0; xx < 3; xx++) {
+                    const px = Math.min(VISUAL_SIZE - 1, x * 3 + xx);
+                    const py = Math.min(VISUAL_SIZE - 1, y * 3 + yy);
+                    suma += gris[py * VISUAL_SIZE + px];
+                }
+            }
+            small.push(suma / 9);
+        }
+    }
+
+    return {
+        mean: [sr / totalPix, sg / totalPix, sb / totalPix],
+        hist,
+        small
+    };
+}
+
+function distanciaVisual(a, b) {
+    if (!a || !b) return Infinity;
+    let color = 0;
+    for (let i = 0; i < 3; i++) color += Math.abs(a.mean[i] - b.mean[i]);
+
+    let hist = 0;
+    for (let i = 0; i < a.hist.length; i++) hist += Math.abs(a.hist[i] - b.hist[i]);
+
+    let forma = 0;
+    for (let i = 0; i < a.small.length; i++) forma += Math.abs(a.small[i] - b.small[i]);
+
+    // Menor puntuación = foto más parecida.
+    return color * 0.35 + hist * 0.45 + (forma / a.small.length) * 0.20;
+}
+
+async function firmaDeFotoUrl(url) {
+    const cache = cargarCacheVisual();
+    if (cache[url]) return cache[url];
+    try {
+        const img = await cargarImagenVisual(url);
+        const firma = firmaImagen(img);
+        cache[url] = firma;
+        return firma;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function firmaDeArchivo(file) {
+    const img = await cargarImagenVisual(URL.createObjectURL(file));
+    return firmaImagen(img);
+}
+
+function renderResultadosVisual(resultados) {
+    const contenedor = document.getElementById("fotoBusquedaResultados");
+    if (!contenedor) return;
+
+    contenedor.innerHTML = resultados.length
+        ? resultados.map(r => {
+            const p = r.p;
+            const fotos = obtenerFotos(p);
+            const fotoPrincipal = fotos[0] || "";
+            return `<button type="button" class="resultado-visual" data-visual-id="${escaparHTML(p.id)}">
+                ${fotoPrincipal ? `<img src="${escaparHTML(urlMiniaturaVisual(fotoPrincipal))}" alt="">` : `<div class="resultado-visual-sin-foto">🧸</div>`}
+                <span><strong>${escaparHTML(p.nombre || "Sin nombre")}</strong><small>${escaparHTML(p.etiqueta || p.codigo || "Sin código")} · ${obtenerCantidad(p)} unidad(es)</small></span>
+                <b>Ver</b>
+            </button>`;
+        }).join("")
+        : `<div class="sin-resultados"><div>🔎</div><p>No encontramos una coincidencia clara.</p><small>Prueba con una foto más parecida y con el peluche centrado.</small></div>`;
+
+    contenedor.querySelectorAll("[data-visual-id]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            abrirDetalle(btn.dataset.visualId);
+            document.getElementById("fotoBusquedaModal")?.classList.remove("abierto");
+        });
+    });
+}
+
+async function ejecutarBusquedaVisual(file) {
+    if (!file || fotoBusquedaEnCurso) return;
+
+    const estado = document.getElementById("fotoBusquedaEstado");
+    const resultados = document.getElementById("fotoBusquedaResultados");
+    const preview = document.getElementById("fotoBusquedaPreview");
+    fotoBusquedaEnCurso = true;
+
+    if (estado) estado.textContent = "Analizando foto…";
+    if (resultados) resultados.innerHTML = "";
+    if (preview) {
+        preview.hidden = false;
+        preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Foto de búsqueda">`;
+    }
+
+    try {
+        const firmaObjetivo = await firmaDeArchivo(file);
+        const candidatos = peluches.filter(p => obtenerFotos(p).length);
+        const cache = cargarCacheVisual();
+        const resultadosVisuales = [];
+        let procesados = 0;
+
+        // Primero usamos firmas guardadas: son prácticamente instantáneas.
+        const pendientes = [];
+        for (const p of candidatos) {
+            const url = obtenerFotos(p)[0];
+            if (cache[url]) {
+                resultadosVisuales.push({ p, score: distanciaVisual(firmaObjetivo, cache[url]) });
+            } else {
+                pendientes.push({ p, url });
+            }
+        }
+
+        resultadosVisuales.sort((a, b) => a.score - b.score);
+        renderResultadosVisual(resultadosVisuales.slice(0, VISUAL_MAX_RESULTADOS));
+
+        // Las fotos no cacheadas se procesan en pequeños grupos para que el teléfono
+        // no se congele. Los resultados se actualizan progresivamente.
+        const CONCURRENCIA = 6;
+        for (let i = 0; i < pendientes.length; i += CONCURRENCIA) {
+            const grupo = pendientes.slice(i, i + CONCURRENCIA);
+            await Promise.all(grupo.map(async item => {
+                const firma = await firmaDeFotoUrl(item.url);
+                if (firma) resultadosVisuales.push({ p: item.p, score: distanciaVisual(firmaObjetivo, firma) });
+                procesados++;
+            }));
+
+            resultadosVisuales.sort((a, b) => a.score - b.score);
+            renderResultadosVisual(resultadosVisuales.slice(0, VISUAL_MAX_RESULTADOS));
+            if (estado) estado.textContent = `Buscando… ${Math.min(candidatos.length, candidatos.length - pendientes.length + procesados)} / ${candidatos.length}`;
+            // Cede el hilo al navegador para mantener la interfaz fluida.
+            await new Promise(r => setTimeout(r, 0));
+        }
+
+        resultadosVisuales.sort((a, b) => a.score - b.score);
+        renderResultadosVisual(resultadosVisuales.slice(0, VISUAL_MAX_RESULTADOS));
+        if (estado) estado.textContent = resultadosVisuales.length ? "Listo. Toca el peluche que buscas." : "No hay peluches con foto para comparar.";
+        guardarCacheVisual();
+    } catch (error) {
+        console.error("Búsqueda visual:", error);
+        if (estado) estado.textContent = "No se pudo analizar la foto. Prueba con otra imagen.";
+    } finally {
+        fotoBusquedaEnCurso = false;
+    }
+}
+
+function abrirBuscadorFoto() {
+    const modal = document.getElementById("fotoBusquedaModal");
+    const input = document.getElementById("fotoBusquedaInput");
+    const estado = document.getElementById("fotoBusquedaEstado");
+    const resultados = document.getElementById("fotoBusquedaResultados");
+    const preview = document.getElementById("fotoBusquedaPreview");
+    modal?.classList.add("abierto");
+    if (estado) estado.textContent = "Selecciona o toma una foto para buscar.";
+    if (resultados) resultados.innerHTML = "";
+    if (preview) { preview.hidden = true; preview.innerHTML = ""; }
+    if (input) input.value = "";
+}
+
+document.getElementById("btnBuscarFoto")?.addEventListener("click", abrirBuscadorFoto);
+document.getElementById("cerrarFotoBusqueda")?.addEventListener("click", () => {
+    if (!fotoBusquedaEnCurso) document.getElementById("fotoBusquedaModal")?.classList.remove("abierto");
+});
+document.getElementById("fotoBusquedaModal")?.addEventListener("click", e => {
+    if (e.target.id === "fotoBusquedaModal" && !fotoBusquedaEnCurso) e.currentTarget.classList.remove("abierto");
+});
+document.getElementById("fotoBusquedaInput")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (file) ejecutarBusquedaVisual(file);
+});
+
+// Conecta la opción de búsqueda por foto al menú lateral.
+document.querySelectorAll('[data-menu-action="foto"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+        abrirBuscadorFoto();
+        cerrarMenu();
+    });
+});
