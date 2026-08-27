@@ -11,16 +11,19 @@ if (APP_ROOT) {
     }
 }
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    getDocs,
-    deleteDoc,
-    doc,
-    updateDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+// Firebase se carga de forma dinámica para que, si el CDN tarda o falla,
+// la interfaz y sus botones sigan funcionando y podamos mostrar el error real.
+let initializeApp = null;
+let getFirestore = null;
+let collection = null;
+let addDoc = null;
+let getDocs = null;
+let deleteDoc = null;
+let doc = null;
+let updateDoc = null;
+let db = null;
+let firebaseListo = false;
+let firebaseCargando = null;
 
 const firebaseConfig = {
     apiKey: "AIzaSyCZIgfuXyL6_AZxPjbir7j7LIDxi3k5Xo",
@@ -32,8 +35,39 @@ const firebaseConfig = {
     measurementId: "G-VZ537J3Q3E"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+async function iniciarFirebase() {
+    if (firebaseListo) return true;
+    if (firebaseCargando) return firebaseCargando;
+
+    firebaseCargando = (async () => {
+        try {
+            const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+            const fsMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+            initializeApp = appMod.initializeApp;
+            getFirestore = fsMod.getFirestore;
+            collection = fsMod.collection;
+            addDoc = fsMod.addDoc;
+            getDocs = fsMod.getDocs;
+            deleteDoc = fsMod.deleteDoc;
+            doc = fsMod.doc;
+            updateDoc = fsMod.updateDoc;
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            firebaseListo = true;
+            return true;
+        } catch (error) {
+            console.error("Firebase no pudo iniciarse:", error);
+            firebaseListo = false;
+            throw error;
+        } finally {
+            firebaseCargando = null;
+        }
+    })();
+
+    return firebaseCargando;
+}
 
 const CLOUDINARY_UPLOAD = "https://api.cloudinary.com/v1_1/vspx5rke/image/upload";
 const CLOUDINARY_PRESET = "peluches";
@@ -631,6 +665,8 @@ function mostrarPeluchesInicio(datos) {
 
 async function cargarPeluches() {
     try {
+        await iniciarFirebase();
+
         if (lista) {
             lista.innerHTML = `
                 <div class="sin-resultados">
@@ -660,15 +696,7 @@ async function cargarPeluches() {
     } catch (error) {
         console.error("Error cargando inventario:", error);
 
-        if (lista) {
-            lista.innerHTML = `
-                <div class="sin-resultados">
-                    <div>⚠️</div>
-                    <h3>No se pudo cargar el inventario</h3>
-                    <p>Revisa tu conexión e inténtalo de nuevo.</p>
-                </div>
-            `;
-        }
+        mostrarErrorFirebase(error);
     }
 }
 
@@ -2449,6 +2477,22 @@ cerrarFormulario();
 
 
 
+
+// Si Firebase tarda, no bloqueamos la interfaz. Los botones siguen respondiendo.
+function mostrarErrorFirebase(error) {
+    const listaLocal = document.getElementById("lista");
+    if (!listaLocal) return;
+    const mensaje = error?.message || "No se pudo conectar con Firebase.";
+    listaLocal.innerHTML = `
+        <div class="sin-resultados">
+            <div>⚠️</div>
+            <h3>No se pudo cargar el inventario</h3>
+            <p>La aplicación sí abrió, pero no pudo conectar con la base de datos.</p>
+            <button type="button" id="btnReintentarFirebase" class="accion-secundaria">🔄 Reintentar</button>
+        </div>`;
+    document.getElementById("btnReintentarFirebase")?.addEventListener("click", () => cargarPeluches());
+    console.error("Detalle Firebase:", mensaje);
+}
 
 // ============================================================
 // MENÚ LATERAL + MODO TRABAJO RÁPIDO + SELECCIÓN DE ETIQUETAS
