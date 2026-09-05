@@ -2368,6 +2368,198 @@ document.getElementById("detalleEditar")?.addEventListener("click", () => {
     editarPeluche(id);
 });
 
+
+// ===== NUEVO INGRESO POR LOTE =====
+const BORRADOR_INGRESO_KEY = "registroPeluches_borrador_ingreso_v1";
+let borradorTimer = null;
+
+function fechaHoyLocal() {
+    const d = new Date();
+    const offset = d.getTimezoneOffset();
+    return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
+function datosFilaIngreso(fila) {
+    return {
+        codigo: fila.querySelector(".fila-codigo")?.value.trim() || "",
+        nombre: fila.querySelector(".fila-nombre")?.value.trim() || "",
+        precio: fila.querySelector(".fila-precio")?.value || "",
+        etiqueta: fila.querySelector(".fila-etiqueta")?.value.trim() || "",
+        tamano: fila.querySelector(".fila-medida")?.value.trim() || "",
+        cantidadLocal: Math.max(0, Math.floor(numeroSeguro(fila.querySelector(".fila-local")?.value))),
+        cantidadBodega: Math.max(0, Math.floor(numeroSeguro(fila.querySelector(".fila-bodega")?.value))),
+        minimo: Math.max(0, numeroSeguro(fila.querySelector(".fila-minimo")?.value || MINIMO_DEFECTO)),
+        observaciones: fila.querySelector(".fila-observaciones")?.value.trim() || "",
+        fotos: (() => { try { return JSON.parse(fila.dataset.fotos || "[]"); } catch(e) { return []; } })()
+    };
+}
+
+function crearFilaIngreso(datos = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = "ingreso-fila";
+    wrap.innerHTML = `
+        <input class="fila-codigo" placeholder="Código / costo" value="${escaparHTML(datos.codigo || "")}">
+        <input class="fila-nombre" placeholder="Nombre del peluche" value="${escaparHTML(datos.nombre || "")}">
+        <input class="fila-precio" type="number" min="0" step="0.01" placeholder="Precio" value="${escaparHTML(datos.precio ?? "")}">
+        <input class="fila-etiqueta" placeholder="Etiqueta / barras" value="${escaparHTML(datos.etiqueta || "")}">
+        <input class="fila-medida" placeholder="Medida" value="${escaparHTML(datos.tamano || "")}">
+        <input class="fila-local" type="number" min="0" step="1" placeholder="Local" value="${escaparHTML(datos.cantidadLocal ?? 0)}">
+        <input class="fila-bodega" type="number" min="0" step="1" placeholder="Bodega" value="${escaparHTML(datos.cantidadBodega ?? 0)}">
+        <input class="fila-minimo" type="number" min="0" step="1" placeholder="Mín." value="${escaparHTML(datos.minimo ?? MINIMO_DEFECTO)}">
+        <input class="fila-foto" type="file" accept="image/*" multiple title="Fotos de este peluche">
+        <input class="fila-observaciones" placeholder="Observaciones" value="${escaparHTML(datos.observaciones || "")}">
+        <button type="button" class="fila-eliminar" aria-label="Eliminar fila">×</button>`;
+    if (Array.isArray(datos.fotos) && datos.fotos.length) wrap.dataset.fotos = JSON.stringify(datos.fotos);
+    wrap.querySelector(".fila-eliminar").addEventListener("click", () => {
+        const filas = document.querySelectorAll("#ingresoFilas .ingreso-fila");
+        if (filas.length <= 1) {
+            wrap.querySelectorAll("input").forEach(i => { if (i.type === "file") i.value = ""; else if (i.classList.contains("fila-local") || i.classList.contains("fila-bodega")) i.value = 0; else if (i.classList.contains("fila-minimo")) i.value = MINIMO_DEFECTO; else i.value = ""; });
+        } else wrap.remove();
+        programarGuardadoBorrador();
+    });
+    wrap.querySelectorAll("input:not(.fila-foto)").forEach(i => i.addEventListener("input", programarGuardadoBorrador));
+    wrap.querySelector(".fila-foto")?.addEventListener("change", async (e) => {
+        const archivos = e.target.files;
+        if (!archivos?.length) return;
+        const estado = document.getElementById("borradorEstado");
+        if (estado) estado.textContent = "📸 Guardando fotos del borrador...";
+        try {
+            const fotos = (await Promise.all([...archivos].map(subirImagenCloudinary))).filter(Boolean);
+            wrap.dataset.fotos = JSON.stringify(fotos);
+            e.target.value = "";
+            guardarBorradorIngreso();
+            if (estado) estado.textContent = "💾 Borrador guardado automáticamente (incluye fotos)";
+        } catch (error) {
+            console.error("Error subiendo foto del borrador:", error);
+            if (estado) estado.textContent = "⚠️ No se pudieron guardar las fotos todavía";
+        }
+    });
+    return wrap;
+}
+
+function abrirNuevoIngreso() {
+    const modal = document.getElementById("ingresoModal");
+    const cont = document.getElementById("ingresoFilas");
+    const fecha = document.getElementById("ingresoFecha");
+    if (!modal || !cont || !fecha) return;
+    const borrador = cargarBorradorIngreso();
+    cont.innerHTML = "";
+    fecha.value = borrador?.fecha || fechaHoyLocal();
+    const filas = borrador?.filas?.length ? borrador.filas : [{}];
+    filas.forEach(f => cont.appendChild(crearFilaIngreso(f)));
+    modal.classList.add("abierto");
+    actualizarEstadoBorrador(borrador ? "🔄 Borrador recuperado automáticamente" : "💾 Guardado automático activo");
+}
+
+function cerrarNuevoIngreso() {
+    document.getElementById("ingresoModal")?.classList.remove("abierto");
+}
+
+function capturarBorradorIngreso() {
+    const fecha = document.getElementById("ingresoFecha")?.value || fechaHoyLocal();
+    const filas = [...document.querySelectorAll("#ingresoFilas .ingreso-fila")].map(datosFilaIngreso);
+    return { version: 1, fecha, filas, guardado: new Date().toISOString() };
+}
+
+function guardarBorradorIngreso() {
+    try {
+        localStorage.setItem(BORRADOR_INGRESO_KEY, JSON.stringify(capturarBorradorIngreso()));
+        actualizarEstadoBorrador("💾 Borrador guardado automáticamente · " + new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}));
+    } catch (e) {
+        console.warn("No se pudo guardar el borrador local:", e);
+    }
+}
+
+function programarGuardadoBorrador() {
+    clearTimeout(borradorTimer);
+    borradorTimer = setTimeout(guardarBorradorIngreso, 250);
+}
+
+function cargarBorradorIngreso() {
+    try {
+        const raw = localStorage.getItem(BORRADOR_INGRESO_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+}
+
+function actualizarEstadoBorrador(texto) {
+    const el = document.getElementById("borradorEstado");
+    if (el) el.textContent = texto;
+}
+
+function borrarBorradorIngreso() {
+    localStorage.removeItem(BORRADOR_INGRESO_KEY);
+    actualizarEstadoBorrador("🗑️ Borrador eliminado");
+}
+
+async function guardarNuevoIngreso() {
+    const filas = [...document.querySelectorAll("#ingresoFilas .ingreso-fila")];
+    const fecha = document.getElementById("ingresoFecha")?.value || fechaHoyLocal();
+    if (!filas.length) return;
+    const datosFilas = filas.map(datosFilaIngreso);
+    const incompletos = datosFilas.filter(x => !x.codigo || !x.nombre || !x.precio);
+    if (incompletos.length) {
+        alert(`Completa código, nombre y precio en todos los peluches.\n\nFilas incompletas: ${incompletos.length}`);
+        return;
+    }
+    const btn = document.getElementById("btnGuardarIngreso");
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Guardando ingreso..."; }
+    try {
+        const usadas = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
+        const nuevos = [];
+        for (let i = 0; i < filas.length; i++) {
+            const base = datosFilas[i];
+            let etiquetaFinal = normalizar(base.etiqueta);
+            if (!etiquetaFinal) {
+                let n = 1;
+                do { etiquetaFinal = `sin-${String(n).padStart(5, "0")}`; n++; } while (usadas.has(etiquetaFinal));
+                base.etiqueta = etiquetaFinal.toUpperCase();
+            }
+            if (usadas.has(normalizar(base.etiqueta))) throw new Error(`El código de barras / etiqueta "${base.etiqueta}" está repetido en el ingreso o ya existe.`);
+            const archivos = filas[i].querySelector(".fila-foto")?.files;
+            let fotos = [];
+            if (archivos?.length) {
+                fotos = (await Promise.all([...archivos].map(subirImagenCloudinary))).filter(Boolean);
+            } else {
+                try { fotos = JSON.parse(filas[i].dataset.fotos || "[]"); } catch(e) { fotos = []; }
+            }
+            const cantidadLocal = base.cantidadLocal;
+            const cantidadBodega = base.cantidadBodega;
+            const cantidad = cantidadLocal + cantidadBodega;
+            const datos = {
+                codigo: base.codigo, nombre: base.nombre, precio: base.precio, etiqueta: base.etiqueta,
+                tamano: base.tamano, cantidad, cantidadLocal, cantidadBodega, minimo: base.minimo,
+                observaciones: base.observaciones, foto: fotos[0] || "", fotos, fechaIngreso: fecha,
+                ingresoLote: true, loteIngresoFecha: fecha,
+                estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
+            };
+            const nuevo = await addDoc(collection(db, "peluches"), datos);
+            nuevos.push({id: nuevo.id, ...datos});
+            usadas.add(normalizar(base.etiqueta));
+        }
+        peluches = [...nuevos, ...peluches];
+        actualizarResumen();
+        actualizarInterfazBusqueda();
+        borrarBorradorIngreso();
+        cerrarNuevoIngreso();
+        alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos registrados: ${nuevos.length}\n📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}\n📅 Fecha: ${fecha}`);
+    } catch (error) {
+        console.error("Error guardando ingreso:", error);
+        alert(`No se pudo completar el ingreso.\n\n${error.message || "Revisa tu conexión e inténtalo nuevamente."}\n\nEl borrador se conserva para que no pierdas el avance.`);
+        guardarBorradorIngreso();
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "💾 Guardar todo el ingreso"; }
+    }
+}
+
+document.getElementById("btnNuevoIngreso")?.addEventListener("click", abrirNuevoIngreso);
+document.getElementById("cerrarIngreso")?.addEventListener("click", cerrarNuevoIngreso);
+document.getElementById("ingresoModal")?.addEventListener("click", e => { if (e.target.id === "ingresoModal") cerrarNuevoIngreso(); });
+document.getElementById("btnAgregarFilaIngreso")?.addEventListener("click", () => { document.getElementById("ingresoFilas")?.appendChild(crearFilaIngreso()); programarGuardadoBorrador(); });
+document.getElementById("ingresoFecha")?.addEventListener("change", programarGuardadoBorrador);
+document.getElementById("btnGuardarIngreso")?.addEventListener("click", guardarNuevoIngreso);
+document.getElementById("btnDescartarBorrador")?.addEventListener("click", () => { if (confirm("¿Descartar el avance del ingreso? Esta acción no afecta los peluches ya guardados.")) { borrarBorradorIngreso(); document.getElementById("ingresoFilas").innerHTML = ""; document.getElementById("ingresoFilas").appendChild(crearFilaIngreso()); document.getElementById("ingresoFecha").value = fechaHoyLocal(); } });
+
 // Funciones utilizadas directamente desde el HTML.
 window.editarPeluche =
     editarPeluche;
