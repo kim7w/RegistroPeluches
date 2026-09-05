@@ -223,3 +223,22 @@ html, body { overflow-x:hidden; }
     .resultado-visual img,.resultado-visual-sin-foto{width:54px;height:54px}
     .resultado-visual b{font-size:11px}
 }
+
+
+/* ===== NUEVO INGRESO POR LOTE + BORRADOR AUTOMÁTICO ===== */
+#btnNuevoIngreso{color:#6d28d9;background:#fff;border:2px solid #e7defc!important}
+.ingreso-card{width:min(1050px,100%)}
+.ingreso-cabecera{display:grid;grid-template-columns:260px 1fr;gap:12px;align-items:end;margin:4px 0 14px}
+.ingreso-cabecera label{font-size:13px}
+.ingreso-cabecera input{width:100%;margin-top:6px;padding:11px;border:2px solid var(--borde);border-radius:11px}
+.borrador-estado{padding:11px 13px;border-radius:12px;background:#f8f6fc;color:var(--muted);font-size:12px;font-weight:900}
+.ingreso-filas{display:grid;gap:10px;max-height:58vh;overflow:auto;padding:2px}
+.ingreso-fila{display:grid;grid-template-columns:1.15fr 1fr .7fr .8fr .65fr .8fr 1.2fr 42px;gap:7px;padding:10px;border:1px solid var(--borde);border-radius:15px;background:#fbfaff}
+.ingreso-fila input{width:100%;min-width:0;padding:9px;border:1px solid #ddd6e8;border-radius:9px;background:#fff}
+.ingreso-fila .fila-foto{font-size:10px;padding:7px}
+.ingreso-fila .fila-eliminar{border:0;border-radius:9px;background:#fee2e2;color:#b91c1c;font-weight:900}
+.ingreso-acciones{display:grid;grid-template-columns:1fr 1fr 170px;gap:8px;margin-top:12px}
+.ingreso-acciones button{border:0;border-radius:12px;padding:12px;font-weight:900}
+.btn-agregar-fila{background:#f2edff;color:#6d28d9}.btn-guardar-ingreso{background:linear-gradient(135deg,var(--primario),var(--secundario));color:#fff}.btn-descartar-borrador{background:#fee2e2;color:#b91c1c}
+@media(max-width:850px){.ingreso-fila{grid-template-columns:1fr 1fr 1fr 1fr}.ingreso-fila input,.ingreso-fila .fila-foto{grid-column:auto}.ingreso-fila .fila-nombre{grid-column:span 2}.ingreso-fila .fila-observaciones{grid-column:span 2}.ingreso-acciones{grid-template-columns:1fr 1fr}.btn-descartar-borrador{grid-column:1/-1}}
+@media(max-width:600px){.ingreso-cabecera{grid-template-columns:1fr}.ingreso-fila{grid-template-columns:1fr 1fr;gap:7px}.ingreso-fila .fila-nombre,.ingreso-fila .fila-observaciones{grid-column:1/-1}.ingreso-fila .fila-foto{grid-column:1/-1}.ingreso-acciones{grid-template-columns:1fr}.btn-descartar-borrador{grid-column:auto}}
