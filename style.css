@@ -242,3 +242,33 @@ html, body { overflow-x:hidden; }
 .btn-agregar-fila{background:#f2edff;color:#6d28d9}.btn-guardar-ingreso{background:linear-gradient(135deg,var(--primario),var(--secundario));color:#fff}.btn-descartar-borrador{background:#fee2e2;color:#b91c1c}
 @media(max-width:850px){.ingreso-fila{grid-template-columns:1fr 1fr 1fr 1fr}.ingreso-fila input,.ingreso-fila .fila-foto{grid-column:auto}.ingreso-fila .fila-nombre{grid-column:span 2}.ingreso-fila .fila-observaciones{grid-column:span 2}.ingreso-acciones{grid-template-columns:1fr 1fr}.btn-descartar-borrador{grid-column:1/-1}}
 @media(max-width:600px){.ingreso-cabecera{grid-template-columns:1fr}.ingreso-fila{grid-template-columns:1fr 1fr;gap:7px}.ingreso-fila .fila-nombre,.ingreso-fila .fila-observaciones{grid-column:1/-1}.ingreso-fila .fila-foto{grid-column:1/-1}.ingreso-acciones{grid-template-columns:1fr}.btn-descartar-borrador{grid-column:auto}}
+
+/* ===== Últimos peluches ===== */
+.ultimos-panel{margin:0 0 18px;padding:16px;border:1px solid var(--borde,#eadff2);border-radius:18px;background:#fff;box-shadow:0 6px 20px rgba(72,45,120,.06)}
+.ultimos-cabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.ultimos-cabecera h2{margin:0;color:var(--texto,#342a49);font-size:20px}
+.ultimos-cabecera p{margin:3px 0 0;color:var(--muted,#777080);font-size:12px;font-weight:700}
+.ultimos-cabecera button{border:0;border-radius:11px;padding:9px 12px;background:#f3e8ff;color:#6d28d9;font-weight:900;cursor:pointer}
+.ultimos-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.ultimo-card{border:1px solid #eee7f3;border-radius:15px;background:#faf8fc;padding:9px;cursor:pointer;transition:.15s;min-width:0}
+.ultimo-card:hover{transform:translateY(-1px);border-color:#c4b5fd}
+.ultimo-card img,.ultimo-sin-foto{width:100%;height:105px;object-fit:cover;border-radius:11px;background:#f0eafa;display:grid;place-items:center;font-size:34px}
+.ultimo-card strong{display:block;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#3d3150}
+.ultimo-card small{display:block;margin-top:2px;color:#81758e;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ultimo-card b{display:block;margin-top:5px;color:#7c3aed;font-size:12px}
+@media(max-width:800px){.ultimos-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.ultimos-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ultimo-card img,.ultimo-sin-foto{height:115px}.ultimos-cabecera h2{font-size:17px}}
+
+/* ===== Menú e historial: estados seguros ===== */
+.menu-overlay[hidden]{display:none!important}
+.modal{display:none}
+.modal.abierto{display:flex}
+
+
+/* Mejoras: lector de barras dentro de cada fila del ingreso múltiple */
+.fila-barcode{display:flex;gap:6px;align-items:center;min-width:0}
+.fila-barcode .fila-etiqueta{flex:1;min-width:0}
+.fila-escanear{border:0;border-radius:10px;padding:9px 10px;cursor:pointer;font-size:16px;background:#8b5cf6;color:#fff;line-height:1}
+.fila-escanear:hover{filter:brightness(.95)}
+@media (max-width:700px){.fila-barcode{width:100%}.fila-escanear{padding:10px 12px}}
+\n\n/* ===== Paneles nuevos: estadísticas, favoritos, ingresos y precios ===== */\n.extra-card{max-width:900px;max-height:88vh;overflow:auto}.extra-contenido{display:grid;gap:12px}.extra-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.extra-stat,.extra-item,.ingreso-resumen,.precio-item{background:#faf9ff;border:1px solid var(--borde);border-radius:14px;padding:14px}.extra-stat strong{display:block;font-size:1.5rem}.extra-stat span,.extra-item small,.precio-item small{color:var(--muted)}.extra-item{display:flex;gap:12px;align-items:center}.extra-item img{width:62px;height:62px;object-fit:cover;border-radius:12px}.extra-item .sin-foto{width:62px;height:62px;display:grid;place-items:center;background:#eeeafa;border-radius:12px}.extra-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}.extra-actions button{border:1px solid var(--borde);background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer}.precio-historial{display:grid;gap:8px}.precio-item{display:flex;justify-content:space-between;align-items:center;gap:12px}.precio-actual{font-weight:900}.favorito-btn{border:1px solid var(--borde);background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}.favorito-activo{background:#fff7c2}.ingreso-resumen{cursor:pointer}.ingreso-resumen strong{display:block}.ingreso-detalle{display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--borde)}.ingreso-resumen.abierto .ingreso-detalle{display:block}.menu-nav button b{margin-left:auto}\n@media(max-width:600px){.extra-card{width:96vw}.extra-item{align-items:flex-start}.precio-item{align-items:flex-start;flex-direction:column}}\n
