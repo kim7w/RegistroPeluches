@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="style.css?v=20260825-05">
 </head>
 <body>
-<div class="contenedor">
+<div class="contenedor" id="topPagina">
 <div class="menu-overlay" id="menuOverlay" hidden></div>
 <aside class="menu-lateral" id="menuLateral" aria-label="Menú principal" aria-hidden="true">
     <div class="menu-cabecera">
@@ -26,8 +26,14 @@
         <button type="button" data-menu-action="inicio">🏠 <span>Inicio</span></button>
         <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
         <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
+        <button type="button" data-menu-action="nuevoIngreso">📦 <span>Nuevo ingreso (varios)</span></button>
         <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
         <button type="button" data-menu-action="foto">📸 <span>Buscar por foto</span></button>
+        <button type="button" data-menu-action="ultimos">🆕 <span>Últimos peluches</span></button>
+        <button type="button" data-menu-action="estadisticas">📊 <span>Estadísticas</span></button>
+        <button type="button" data-menu-action="favoritos">⭐ <span>Favoritos</span><b id="menuTotalFavoritos">0</b></button>
+        <button type="button" data-menu-action="ingresos">📦 <span>Historial de ingresos</span></button>
+        <button type="button" data-menu-action="precios">🏷️ <span>Historial de precios</span></button>
         <button type="button" id="btnMenuModoRapido" data-menu-action="rapido" aria-pressed="false" onclick="alternarModoRapido()">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
@@ -177,6 +183,17 @@
         <button type="button" id="btnImprimirSeleccion">🖨️ Imprimir seleccionados</button>
     </section>
 
+    <section class="ultimos-panel" id="ultimosPanel">
+        <div class="ultimos-cabecera">
+            <div>
+                <h2>🆕 Últimos peluches subidos</h2>
+                <p>Los registros agregados más recientemente.</p>
+            </div>
+            <button type="button" id="btnVerTodosRecientes">Ver todos</button>
+        </div>
+        <div id="ultimosPeluches" class="ultimos-grid"></div>
+    </section>
+
     <div id="lista" aria-live="polite"></div>
     <div id="sinResultados" class="sin-resultados" style="display:none;">
         <div>🧸</div>
@@ -254,6 +271,16 @@
             <button type="button" id="detalleEditar">✏️ Editar</button>
             <button type="button" id="detalleHistorial">🕘 Historial</button>
         </div>
+    </div>
+</div>
+
+<div id="panelExtraModal" class="modal" role="dialog" aria-modal="true" aria-label="Información del inventario">
+    <div class="modal-card extra-card">
+        <div class="modal-header">
+            <div><h2 id="extraTitulo">Información</h2><p id="extraSubtitulo">Consulta de inventario</p></div>
+            <button type="button" id="cerrarExtra" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <div id="extraContenido" class="extra-contenido"></div>
     </div>
 </div>
 
