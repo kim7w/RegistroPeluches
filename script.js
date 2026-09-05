@@ -984,6 +984,10 @@ async function guardarFormulario(e) {
             return;
         }
 
+        const productoExistente = editando
+            ? peluches.find(p => p.id === editando)
+            : null;
+
         const datos = {
             codigo,
             nombre,
@@ -1002,6 +1006,13 @@ async function guardarFormulario(e) {
             fotos,
 
             fechaIngreso,
+            // Se conserva la fecha/hora original al editar; los nuevos
+            // registros reciben una marca de tiempo para poder mostrar
+            // correctamente los últimos peluches subidos.
+            fechaRegistro: productoExistente?.fechaRegistro || new Date().toISOString(),
+            ingresoId: productoExistente?.ingresoId || `individual-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+            tipoIngreso: productoExistente?.tipoIngreso || "individual",
+            historialPrecios: productoExistente?.historialPrecios || [{ precio: Number(precio), fecha: new Date().toISOString() }],
 
             estado:
                 cantidad <= 0
@@ -1014,6 +1025,15 @@ async function guardarFormulario(e) {
         };
 
         if (editando) {
+            const historialPrecios = Array.isArray(productoExistente?.historialPrecios)
+                ? [...productoExistente.historialPrecios]
+                : [{ precio: Number(productoExistente?.precio ?? precio), fecha: productoExistente?.fechaRegistro || new Date().toISOString() }];
+            const precioAnterior = Number(productoExistente?.precio);
+            const precioNuevo = Number(precio);
+            if (Number.isFinite(precioNuevo) && precioNuevo !== precioAnterior) {
+                historialPrecios.push({ precio: precioNuevo, fecha: new Date().toISOString() });
+            }
+            datos.historialPrecios = historialPrecios.slice(-30);
             await updateDoc(
                 doc(db, "peluches", editando),
                 datos
@@ -1877,6 +1897,15 @@ async function iniciarOCR() {
     }
 }
 
+let scannerDestinoIngresoFila = null;
+
+function abrirScannerParaIngresoFila(fila) {
+    scannerDestinoIngresoFila = fila;
+    const estado = document.getElementById("scannerEstado");
+    if (estado) estado.textContent = "Preparando cámara para llenar el código de barras de esta fila...";
+    abrirScanner();
+}
+
 async function abrirScanner() {
     const modal = document.getElementById("scannerModal");
     const estado = document.getElementById("scannerEstado");
@@ -1966,6 +1995,7 @@ async function cerrarScanner() {
 
     scanner = null;
     scannerActivo = false;
+    scannerDestinoIngresoFila = null;
 
     modal?.classList.remove("abierto");
 
@@ -1981,6 +2011,23 @@ function procesarCodigoEscaneado(codigo) {
         .trim();
 
     if (!valor) return;
+
+    // Si el lector fue abierto desde una fila de "Nuevo ingreso (varios)",
+    // colocamos el código directamente en esa fila en lugar de buscar un producto.
+    if (scannerDestinoIngresoFila) {
+        const fila = scannerDestinoIngresoFila;
+        const input = fila.querySelector(".fila-etiqueta");
+        if (input) {
+            input.value = valor;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.focus();
+        }
+        scannerDestinoIngresoFila = null;
+        cerrarScanner();
+        actualizarEstadoBorrador("💾 Código escaneado y borrador guardado");
+        programarGuardadoBorrador();
+        return;
+    }
 
     cerrarScanner();
 
@@ -2401,7 +2448,7 @@ function crearFilaIngreso(datos = {}) {
         <input class="fila-codigo" placeholder="Código / costo" value="${escaparHTML(datos.codigo || "")}">
         <input class="fila-nombre" placeholder="Nombre del peluche" value="${escaparHTML(datos.nombre || "")}">
         <input class="fila-precio" type="number" min="0" step="0.01" placeholder="Precio" value="${escaparHTML(datos.precio ?? "")}">
-        <input class="fila-etiqueta" placeholder="Etiqueta / barras" value="${escaparHTML(datos.etiqueta || "")}">
+        <div class="fila-barcode"><input class="fila-etiqueta" placeholder="Código de barras" value="${escaparHTML(datos.etiqueta || "")}"><button type="button" class="fila-escanear" title="Escanear código de barras">📷</button></div>
         <input class="fila-medida" placeholder="Medida" value="${escaparHTML(datos.tamano || "")}">
         <input class="fila-local" type="number" min="0" step="1" placeholder="Local" value="${escaparHTML(datos.cantidadLocal ?? 0)}">
         <input class="fila-bodega" type="number" min="0" step="1" placeholder="Bodega" value="${escaparHTML(datos.cantidadBodega ?? 0)}">
@@ -2410,6 +2457,7 @@ function crearFilaIngreso(datos = {}) {
         <input class="fila-observaciones" placeholder="Observaciones" value="${escaparHTML(datos.observaciones || "")}">
         <button type="button" class="fila-eliminar" aria-label="Eliminar fila">×</button>`;
     if (Array.isArray(datos.fotos) && datos.fotos.length) wrap.dataset.fotos = JSON.stringify(datos.fotos);
+    wrap.querySelector(".fila-escanear")?.addEventListener("click", () => abrirScannerParaIngresoFila(wrap));
     wrap.querySelector(".fila-eliminar").addEventListener("click", () => {
         const filas = document.querySelectorAll("#ingresoFilas .ingreso-fila");
         if (filas.length <= 1) {
@@ -2526,10 +2574,14 @@ async function guardarNuevoIngreso() {
             const cantidadLocal = base.cantidadLocal;
             const cantidadBodega = base.cantidadBodega;
             const cantidad = cantidadLocal + cantidadBodega;
+            const loteId = window.__ingresoLoteId || (window.__ingresoLoteId = `lote-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
             const datos = {
                 codigo: base.codigo, nombre: base.nombre, precio: base.precio, etiqueta: base.etiqueta,
                 tamano: base.tamano, cantidad, cantidadLocal, cantidadBodega, minimo: base.minimo,
                 observaciones: base.observaciones, foto: fotos[0] || "", fotos, fechaIngreso: fecha,
+                fechaRegistro: new Date().toISOString(),
+                ingresoId: loteId, tipoIngreso: "lote",
+                historialPrecios: [{ precio: Number(base.precio), fecha: new Date().toISOString() }],
                 ingresoLote: true, loteIngresoFecha: fecha,
                 estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
             };
@@ -2541,6 +2593,7 @@ async function guardarNuevoIngreso() {
         actualizarResumen();
         actualizarInterfazBusqueda();
         borrarBorradorIngreso();
+        window.__ingresoLoteId = null;
         cerrarNuevoIngreso();
         alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos registrados: ${nuevos.length}\n📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}\n📅 Fecha: ${fecha}`);
     } catch (error) {
@@ -2608,3 +2661,232 @@ document.getElementById("btnFiltroBodega")?.addEventListener(
 document.getElementById("btnLimpiarFiltros")?.addEventListener(
     "click", () => aplicarFiltroUbicacion("todos")
 );
+
+
+// ============================================================
+// CORRECCIÓN DEL MENÚ + HISTORIAL GLOBAL + ÚLTIMOS PELUCHES
+// ============================================================
+
+function abrirMenuPrincipal() {
+    const menu = document.getElementById("menuLateral");
+    const overlay = document.getElementById("menuOverlay");
+    const boton = document.getElementById("btnMenu");
+    if (!menu) return;
+    menu.classList.add("abierto");
+    if (overlay) {
+        overlay.hidden = false;
+        requestAnimationFrame(() => overlay.classList.add("visible"));
+    }
+    menu.setAttribute("aria-hidden", "false");
+    boton?.setAttribute("aria-expanded", "true");
+    document.body.classList.add("menu-abierto");
+}
+
+function cerrarMenuPrincipal() {
+    const menu = document.getElementById("menuLateral");
+    const overlay = document.getElementById("menuOverlay");
+    const boton = document.getElementById("btnMenu");
+    menu?.classList.remove("abierto");
+    if (overlay) {
+        overlay.classList.remove("visible");
+        setTimeout(() => { if (!overlay.classList.contains("visible")) overlay.hidden = true; }, 220);
+    }
+    menu?.setAttribute("aria-hidden", "true");
+    boton?.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("menu-abierto");
+}
+
+function desplazarA(id) {
+    cerrarMenuPrincipal();
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function activarFiltroDesdeMenu(filtro) {
+    filtroActivo = filtro;
+    document.querySelectorAll(".filtro").forEach(b => b.classList.toggle("activo", b.dataset.filtro === filtro));
+    actualizarInterfazBusqueda();
+    cerrarMenuPrincipal();
+    document.getElementById("seccionPeluches")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function alternarModoRapido() {
+    const activo = document.body.classList.toggle("modo-trabajo-rapido");
+    const barra = document.getElementById("modoRapidoBarra");
+    const boton = document.getElementById("btnMenuModoRapido");
+    const estado = document.getElementById("menuModoRapido");
+    if (barra) barra.hidden = !activo;
+    if (boton) boton.setAttribute("aria-pressed", String(activo));
+    if (estado) estado.textContent = activo ? "ON" : "OFF";
+    cerrarMenuPrincipal();
+    if (activo) document.getElementById("lista")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+window.alternarModoRapido = alternarModoRapido;
+
+function formatearFechaHistorial(fecha) {
+    if (!fecha) return "Fecha no disponible";
+    const d = new Date(fecha);
+    if (Number.isNaN(d.getTime())) return String(fecha);
+    return d.toLocaleString("es-GT", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit"
+    });
+}
+
+function obtenerMovimientosGlobales() {
+    const movimientos = [];
+    peluches.forEach(p => {
+        (Array.isArray(p.movimientos) ? p.movimientos : []).forEach(m => {
+            movimientos.push({ ...m, producto: p.nombre || "Peluche", codigo: p.codigo || "", id: p.id });
+        });
+    });
+    return movimientos.sort((a,b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+}
+
+function abrirHistorial(id = null) {
+    const modal = document.getElementById("historialModal");
+    const titulo = document.getElementById("historialProducto");
+    const contenido = document.getElementById("historialContenido");
+    if (!modal || !contenido) return;
+
+    let movimientos = [];
+    if (id) {
+        const p = peluches.find(x => x.id === id);
+        if (!p) return;
+        movimientos = (Array.isArray(p.movimientos) ? p.movimientos : [])
+            .map(m => ({ ...m, producto: p.nombre || "Peluche", codigo: p.codigo || "", id: p.id }))
+            .sort((a,b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+        if (titulo) titulo.textContent = `${p.nombre || "Peluche"} · Historial`;
+    } else {
+        movimientos = obtenerMovimientosGlobales();
+        if (titulo) titulo.textContent = "Todos los movimientos";
+    }
+
+    if (!movimientos.length) {
+        contenido.innerHTML = `<div class="historial-item"><strong>📭 No hay movimientos registrados</strong><span>Cuando registres una entrada o salida aparecerá aquí.</span></div>`;
+    } else {
+        contenido.innerHTML = movimientos.map(m => {
+            const esEntrada = m.tipo === "entrada";
+            return `<div class="historial-item">
+                <strong>${esEntrada ? "➕ Entrada" : "➖ Salida"} · ${escaparHTML(m.producto)}</strong>
+                <span>${esEntrada ? "Se agregaron" : "Se retiraron"} <b>${numeroSeguro(m.cantidad)}</b> unidad(es) ${m.destino ? `en ${escaparHTML(m.destino)}` : ""}.</span>
+                ${!id && m.codigo ? `<span>🏷️ ${escaparHTML(m.codigo)}</span>` : ""}
+                <small>${formatearFechaHistorial(m.fecha)}</small>
+            </div>`;
+        }).join("");
+    }
+    modal.classList.add("abierto");
+}
+
+function cerrarHistorial() {
+    document.getElementById("historialModal")?.classList.remove("abierto");
+}
+
+function actualizarUltimosPeluches() {
+    const cont = document.getElementById("ultimosPeluches");
+    if (!cont) return;
+
+    const recientes = peluches
+        .map((p, indice) => ({ p, indice }))
+        .sort((a,b) => {
+            const da = new Date(a.p.fechaRegistro || (a.p.fechaIngreso ? `${a.p.fechaIngreso}T12:00:00` : 0)).getTime();
+            const db = new Date(b.p.fechaRegistro || (b.p.fechaIngreso ? `${b.p.fechaIngreso}T12:00:00` : 0)).getTime();
+            return (db - da) || (a.indice - b.indice);
+        })
+        .map(x => x.p)
+        .slice(0, 8);
+
+    if (!recientes.length) {
+        cont.innerHTML = `<div class="historial-item"><strong>🧸 Aún no hay peluches registrados.</strong><span>Cuando agregues productos aparecerán aquí.</span></div>`;
+        return;
+    }
+
+    cont.innerHTML = recientes.map(p => {
+        const fotoPrincipal = obtenerFotos(p)[0] || "";
+        const cantidad = obtenerCantidad(p);
+        const fecha = p.fechaIngreso ? new Date(`${p.fechaIngreso}T12:00:00`) : null;
+        const fechaTexto = fecha && !Number.isNaN(fecha.getTime()) ? fecha.toLocaleDateString("es-GT", {day:"2-digit",month:"short",year:"numeric"}) : "Fecha no disponible";
+        return `<article class="ultimo-card" data-ultimo-id="${escaparHTML(p.id)}" role="button" tabindex="0">
+            ${fotoPrincipal ? `<img src="${escaparHTML(fotoPrincipal)}" alt="${escaparHTML(p.nombre || "Peluche")}">` : `<div class="ultimo-sin-foto">🧸</div>`}
+            <strong>${escaparHTML(p.nombre || "Sin nombre")}</strong>
+            <small>${escaparHTML(p.codigo || "Sin código")} · ${escaparHTML(p.tamano || p.medida || "Sin medida")}</small>
+            <b>📦 ${cantidad} · 📅 ${escaparHTML(fechaTexto)}</b>
+        </article>`;
+    }).join("");
+
+    cont.querySelectorAll("[data-ultimo-id]").forEach(card => {
+        const id = card.dataset.ultimoId;
+        card.addEventListener("click", () => abrirDetalle(id));
+        card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirDetalle(id); } });
+    });
+}
+
+// Sobrescribimos de forma segura la actualización para que los últimos registros
+// se refresquen después de cargar, guardar, editar o mover inventario.
+const _actualizarResumenOriginal = actualizarResumen;
+actualizarResumen = function() {
+    _actualizarResumenOriginal();
+    actualizarUltimosPeluches();
+};
+
+// Menú hamburguesa.
+document.getElementById("btnMenu")?.addEventListener("click", e => {
+    e.stopPropagation();
+    const abierto = document.getElementById("menuLateral")?.classList.contains("abierto");
+    abierto ? cerrarMenuPrincipal() : abrirMenuPrincipal();
+});
+document.getElementById("cerrarMenu")?.addEventListener("click", cerrarMenuPrincipal);
+document.getElementById("menuOverlay")?.addEventListener("click", cerrarMenuPrincipal);
+
+// Acciones del menú lateral.
+document.querySelectorAll("[data-menu-action]").forEach(boton => {
+    boton.addEventListener("click", () => {
+        const accion = boton.dataset.menuAction;
+        if (accion === "inicio") return desplazarA("topPagina");
+        if (accion === "peluches") return desplazarA("seccionPeluches");
+        if (accion === "nuevo") { cerrarMenuPrincipal(); document.getElementById("btnNuevo")?.click(); return; }
+        if (accion === "nuevoIngreso") { cerrarMenuPrincipal(); abrirNuevoIngreso(); return; }
+        if (accion === "escanear") { cerrarMenuPrincipal(); document.getElementById("btnEscanear")?.click(); return; }
+        if (accion === "foto") { cerrarMenuPrincipal(); document.getElementById("btnBuscarFoto")?.click(); return; }
+        if (accion === "ultimos") { cerrarMenuPrincipal(); document.getElementById("ultimosPanel")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+        if (accion === "rapido") return alternarModoRapido();
+        if (accion === "bajo") return activarFiltroDesdeMenu("bajo");
+        if (accion === "agotado") return activarFiltroDesdeMenu("agotado");
+        if (accion === "historial") { abrirHistorial(); cerrarMenuPrincipal(); return; }
+        if (accion === "etiquetas") { cerrarMenuPrincipal(); document.getElementById("btnImprimir")?.click(); return; }
+        if (accion === "exportar") { cerrarMenuPrincipal(); document.getElementById("btnExportar")?.click(); return; }
+        if (accion === "importar") { cerrarMenuPrincipal(); document.getElementById("btnImportar")?.click(); return; }
+    });
+});
+
+// Historial desde el detalle de un peluche.
+document.getElementById("detalleHistorial")?.addEventListener("click", () => {
+    if (!detalleId) return;
+    const id = detalleId;
+    cerrarDetalle();
+    abrirHistorial(id);
+});
+document.getElementById("cerrarHistorial")?.addEventListener("click", cerrarHistorial);
+document.getElementById("historialModal")?.addEventListener("click", e => {
+    if (e.target.id === "historialModal") cerrarHistorial();
+});
+
+document.getElementById("btnVerTodosRecientes")?.addEventListener("click", () => {
+    desplazarA("seccionPeluches");
+    const boton = document.querySelector('.filtro[data-filtro="todos"]');
+    boton?.click();
+});
+
+// Atajos de teclado y cierre de menú/modal.
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+        cerrarMenuPrincipal();
+        cerrarHistorial();
+    }
+});
+
+// Primer pintado de la sección de recientes.
+actualizarUltimosPeluches();
+
+
+// ============================================================\n// MEJORAS DEL INVENTARIO: estadísticas, favoritos, historial\n// de ingresos y precios. No incluye costos ni ganancias.\n// ============================================================\nconst FAVORITOS_KEY = "registroPeluches_favoritos_v1";\nfunction obtenerFavoritos(){ try { const a=JSON.parse(localStorage.getItem(FAVORITOS_KEY)||"[]"); return new Set(Array.isArray(a)?a:[]); } catch(e){ return new Set(); } }\nfunction guardarFavoritos(set){ localStorage.setItem(FAVORITOS_KEY, JSON.stringify([...set])); }\nfunction alternarFavorito(id){ const set=obtenerFavoritos(); set.has(id)?set.delete(id):set.add(id); guardarFavoritos(set); actualizarMenuFavoritos(); if(document.getElementById("panelExtraModal")?.classList.contains("abierto") && document.getElementById("extraTitulo")?.textContent.includes("Favoritos")) abrirPanelExtra("favoritos"); }\nfunction actualizarMenuFavoritos(){ const el=document.getElementById("menuTotalFavoritos"); if(el) el.textContent=obtenerFavoritos().size; }\n\nfunction abrirPanelExtra(tipo){\n const modal=document.getElementById("panelExtraModal"), title=document.getElementById("extraTitulo"), sub=document.getElementById("extraSubtitulo"), cont=document.getElementById("extraContenido");\n if(!modal||!cont) return;\n const set=obtenerFavoritos();\n if(tipo==="estadisticas"){\n   const unidades=peluches.reduce((s,p)=>s+obtenerCantidad(p),0), local=peluches.reduce((s,p)=>s+obtenerCantidadLocal(p),0), bodega=peluches.reduce((s,p)=>s+obtenerCantidadBodega(p),0), bajo=peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length, agot=peluches.filter(p=>estadoPeluche(p)==="Agotado").length;\n   title.textContent="📊 Estadísticas"; sub.textContent="Resumen del inventario, sin ganancias";\n   cont.innerHTML=`<div class="extra-grid"><div class="extra-stat"><strong>${peluches.length}</strong><span>Tipos de peluches</span></div><div class="extra-stat"><strong>${unidades}</strong><span>Unidades</span></div><div class="extra-stat"><strong>${local}</strong><span>En local</span></div><div class="extra-stat"><strong>${bodega}</strong><span>En bodega</span></div><div class="extra-stat"><strong>${bajo}</strong><span>Inventario bajo</span></div><div class="extra-stat"><strong>${agot}</strong><span>Agotados</span></div></div>`;\n } else if(tipo==="favoritos"){\n   title.textContent="⭐ Favoritos"; sub.textContent=`${set.size} peluche(s) marcado(s)`; const fav=peluches.filter(p=>set.has(p.id));\n   cont.innerHTML=fav.length?fav.map(p=>itemExtra(p,true)).join(""):`<div class="extra-item"><div class="sin-foto">⭐</div><div><strong>No tienes favoritos todavía.</strong><small>Marca un peluche como favorito desde su detalle.</small></div></div>`;\n   cont.querySelectorAll("[data-extra-id]").forEach(x=>x.addEventListener("click",()=>abrirDetalle(x.dataset.extraId)));\n } else if(tipo==="ingresos"){\n   title.textContent="📦 Historial de ingresos"; sub.textContent="Lotes y registros de entrada";\n   const grupos=new Map();\n   peluches.forEach(p=>{ const id=p.ingresoId || `fecha-${p.fechaIngreso||"sin-fecha"}-${p.fechaRegistro||p.id}`; if(!grupos.has(id)) grupos.set(id,[]); grupos.get(id).push(p); });\n   const arr=[...grupos.entries()].sort((a,b)=>new Date(b[1][0].fechaRegistro||0)-new Date(a[1][0].fechaRegistro||0));\n   cont.innerHTML=arr.length?arr.slice(0,50).map(([id,ps])=>{const fecha=ps[0].fechaIngreso||"Sin fecha";const uds=ps.reduce((s,p)=>s+obtenerCantidad(p),0);return `<div class="ingreso-resumen" data-ingreso-id="${escaparHTML(id)}"><strong>📅 ${escaparHTML(fecha)} · ${ps.length} tipo(s) · ${uds} unidad(es)</strong><small>${ps.map(p=>escaparHTML(p.nombre||"Sin nombre")).join(" · ")}</small><div class="ingreso-detalle">${ps.map(p=>`<div>🧸 <b>${escaparHTML(p.nombre||"Sin nombre")}</b> · ${obtenerCantidad(p)} unidad(es) · ${escaparHTML(p.etiqueta||"Sin barras")}</div>`).join("")}</div></div>`}).join(""):`<div class="extra-item"><strong>📭 Aún no hay ingresos registrados.</strong></div>`;\n   cont.querySelectorAll(".ingreso-resumen").forEach(x=>x.addEventListener("click",()=>x.classList.toggle("abierto")));\n } else if(tipo==="precios"){\n   title.textContent="🏷️ Historial de precios"; sub.textContent="Cambios de precio guardados por producto";\n   const conCambios=peluches.filter(p=>Array.isArray(p.historialPrecios)&&p.historialPrecios.length>1);\n   cont.innerHTML=conCambios.length?conCambios.sort((a,b)=>new Date(b.historialPrecios.at(-1)?.fecha||0)-new Date(a.historialPrecios.at(-1)?.fecha||0)).map(p=>`<div class="extra-item"><div class="sin-foto">🏷️</div><div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"")} · ${escaparHTML(p.etiqueta||"")}</small><div class="precio-historial">${p.historialPrecios.slice().reverse().map(h=>`<div class="precio-item"><span>Q${escaparHTML(h.precio)}</span><small>${formatearFechaHistorial(h.fecha)}</small></div>`).join("")}</div></div></div>`).join(""):`<div class="extra-item"><strong>🏷️ No hay cambios de precio registrados todavía.</strong><small>Cuando modifiques el precio de un peluche se guardará el anterior.</small></div>`;\n }\n modal.classList.add("abierto");\n}\nfunction itemExtra(p,fav=false){const foto=obtenerFotos(p)[0];return `<div class="extra-item" data-extra-id="${escaparHTML(p.id)}">${foto?`<img src="${escaparHTML(foto)}" alt="">`:`<div class="sin-foto">🧸</div>`}<div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"Sin código")} · ${escaparHTML(p.tamano||p.medida||"Sin medida")}</small></div><button type="button" class="favorito-btn ${fav?"favorito-activo":""}" data-fav-id="${escaparHTML(p.id)}">${fav?"⭐":"☆"}</button></div>`}\nfunction cerrarPanelExtra(){document.getElementById("panelExtraModal")?.classList.remove("abierto");}\ndocument.getElementById("cerrarExtra")?.addEventListener("click",cerrarPanelExtra);\ndocument.getElementById("panelExtraModal")?.addEventListener("click",e=>{if(e.target.id==="panelExtraModal")cerrarPanelExtra(); if(e.target.dataset?.favId){e.stopPropagation();alternarFavorito(e.target.dataset.favId);}});\n\n// Añade favorito al detalle sin alterar las funciones existentes.\nconst _abrirDetalleOriginal=abrirDetalle;\nabrirDetalle=function(id){_abrirDetalleOriginal(id); const p=peluches.find(x=>x.id===id); const cont=document.getElementById("detalleContenido"); if(!p||!cont)return; const b=document.createElement("button"); b.type="button"; b.className="favorito-btn"; b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos"; b.onclick=()=>{alternarFavorito(id); b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos";}; cont.appendChild(b);};\n\n// Extiende las acciones del menú sin romper las anteriores.\ndocument.querySelectorAll("[data-menu-action]").forEach(btn=>btn.addEventListener("click",()=>{const a=btn.dataset.menuAction; if(a==="estadisticas"){cerrarMenuPrincipal();abrirPanelExtra("estadisticas");} else if(a==="favoritos"){cerrarMenuPrincipal();abrirPanelExtra("favoritos");} else if(a==="ingresos"){cerrarMenuPrincipal();abrirPanelExtra("ingresos");} else if(a==="precios"){cerrarMenuPrincipal();abrirPanelExtra("precios");}}));\n\nactualizarMenuFavoritos();\n
