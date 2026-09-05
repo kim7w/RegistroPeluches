@@ -76,6 +76,7 @@
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
+        <button type="button" id="btnNuevoIngreso" class="accion-secundaria">📦 Nuevo ingreso (varios)</button>
         <button type="button" id="btnBuscarFoto" class="accion-foto">📸 Buscar por foto</button>
     </section>
 
@@ -217,6 +218,25 @@
         <div class="scanner-manual">
             <input type="text" id="codigoManual" placeholder="Escribe el código de barras">
             <button type="button" id="btnCodigoManual">Buscar</button>
+        </div>
+    </div>
+</div>
+
+<div id="ingresoModal" class="modal" role="dialog" aria-modal="true" aria-label="Nuevo ingreso de peluches">
+    <div class="modal-card ingreso-card">
+        <div class="modal-header">
+            <div><h2>📦 Nuevo ingreso</h2><p>Registra varios peluches del mismo día en una sola operación.</p></div>
+            <button type="button" id="cerrarIngreso" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <div class="ingreso-cabecera">
+            <label>📅 Fecha de ingreso<input type="date" id="ingresoFecha"></label>
+            <div class="borrador-estado" id="borradorEstado">💾 Guardado automático</div>
+        </div>
+        <div id="ingresoFilas" class="ingreso-filas"></div>
+        <div class="ingreso-acciones">
+            <button type="button" id="btnAgregarFilaIngreso" class="btn-agregar-fila">➕ Agregar otro peluche</button>
+            <button type="button" id="btnGuardarIngreso" class="btn-guardar-ingreso">💾 Guardar todo el ingreso</button>
+            <button type="button" id="btnDescartarBorrador" class="btn-descartar-borrador">🗑️ Descartar borrador</button>
         </div>
     </div>
 </div>
