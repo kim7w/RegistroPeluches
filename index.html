@@ -56,29 +56,6 @@
         </div>
     </header>
 
-    <section class="resumen" id="seccionResumen" aria-label="Resumen del inventario">
-        <div class="estadistica">
-            <span class="estadistica-icono">🧸</span>
-            <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">📦</span>
-            <div><strong id="totalUnidades">0</strong><small>Unidades</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">✨</span>
-            <div><strong id="totalDisponibles">0</strong><small>Disponibles</small></div>
-        </div>
-        <div class="estadistica">
-            <span class="estadistica-icono">🏷️</span>
-            <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
-        </div>
-        <div class="estadistica alerta" id="tarjetaBajo">
-            <span class="estadistica-icono">⚠️</span>
-            <div><strong id="totalBajo">0</strong><small>Inventario bajo</small></div>
-        </div>
-    </section>
-
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
@@ -181,17 +158,6 @@
         <button type="button" id="btnSeleccionarTodos">☑️ Seleccionar visibles</button>
         <button type="button" id="btnQuitarSeleccion">✖️ Quitar selección</button>
         <button type="button" id="btnImprimirSeleccion">🖨️ Imprimir seleccionados</button>
-    </section>
-
-    <section class="ultimos-panel" id="ultimosPanel">
-        <div class="ultimos-cabecera">
-            <div>
-                <h2>🆕 Últimos peluches subidos</h2>
-                <p>Los registros agregados más recientemente.</p>
-            </div>
-            <button type="button" id="btnVerTodosRecientes">Ver todos</button>
-        </div>
-        <div id="ultimosPeluches" class="ultimos-grid"></div>
     </section>
 
     <div id="lista" aria-live="polite"></div>
