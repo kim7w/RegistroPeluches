@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="style.css?v=20260825-05">
 </head>
 <body>
-<div class="contenedor" id="topPagina">
+<div class="contenedor">
 <div class="menu-overlay" id="menuOverlay" hidden></div>
 <aside class="menu-lateral" id="menuLateral" aria-label="Menú principal" aria-hidden="true">
     <div class="menu-cabecera">
@@ -26,7 +26,6 @@
         <button type="button" data-menu-action="inicio">🏠 <span>Inicio</span></button>
         <button type="button" data-menu-action="peluches">🧸 <span>Ver peluches</span></button>
         <button type="button" data-menu-action="nuevo">➕ <span>Agregar peluche</span></button>
-        <button type="button" data-menu-action="nuevoIngreso">📦 <span>Nuevo ingreso (varios)</span></button>
         <button type="button" data-menu-action="escanear">📷 <span>Escanear código</span></button>
         <button type="button" data-menu-action="foto">📸 <span>Buscar por foto</span></button>
         <button type="button" data-menu-action="ultimos">🆕 <span>Últimos peluches</span></button>
@@ -56,10 +55,32 @@
         </div>
     </header>
 
+    <section class="resumen" id="seccionResumen" aria-label="Resumen del inventario">
+        <div class="estadistica">
+            <span class="estadistica-icono">🧸</span>
+            <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">📦</span>
+            <div><strong id="totalUnidades">0</strong><small>Unidades</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">✨</span>
+            <div><strong id="totalDisponibles">0</strong><small>Disponibles</small></div>
+        </div>
+        <div class="estadistica">
+            <span class="estadistica-icono">🏷️</span>
+            <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
+        </div>
+        <div class="estadistica alerta" id="tarjetaBajo">
+            <span class="estadistica-icono">⚠️</span>
+            <div><strong id="totalBajo">0</strong><small>Inventario bajo</small></div>
+        </div>
+    </section>
+
     <section class="acciones-rapidas" aria-label="Acciones rápidas">
         <button type="button" id="btnEscanear" class="accion-principal">📷 Escanear código de barras</button>
         <button type="button" id="btnNuevo" class="accion-secundaria">➕ Nuevo peluche</button>
-        <button type="button" id="btnNuevoIngreso" class="accion-secundaria">📦 Nuevo ingreso (varios)</button>
         <button type="button" id="btnBuscarFoto" class="accion-foto">📸 Buscar por foto</button>
     </section>
 
@@ -205,25 +226,6 @@
     </div>
 </div>
 
-<div id="ingresoModal" class="modal" role="dialog" aria-modal="true" aria-label="Nuevo ingreso de peluches">
-    <div class="modal-card ingreso-card">
-        <div class="modal-header">
-            <div><h2>📦 Nuevo ingreso</h2><p>Registra varios peluches del mismo día en una sola operación.</p></div>
-            <button type="button" id="cerrarIngreso" class="modal-close" aria-label="Cerrar">×</button>
-        </div>
-        <div class="ingreso-cabecera">
-            <label>📅 Fecha de ingreso<input type="date" id="ingresoFecha"></label>
-            <div class="borrador-estado" id="borradorEstado">💾 Guardado automático</div>
-        </div>
-        <div id="ingresoFilas" class="ingreso-filas"></div>
-        <div class="ingreso-acciones">
-            <button type="button" id="btnAgregarFilaIngreso" class="btn-agregar-fila">➕ Agregar otro peluche</button>
-            <button type="button" id="btnGuardarIngreso" class="btn-guardar-ingreso">💾 Guardar todo el ingreso</button>
-            <button type="button" id="btnDescartarBorrador" class="btn-descartar-borrador">🗑️ Descartar borrador</button>
-        </div>
-    </div>
-</div>
-
 <div id="detalleModal" class="modal" role="dialog" aria-modal="true" aria-label="Detalle del peluche">
     <div class="modal-card detalle-card">
         <div class="modal-header">
@@ -237,16 +239,6 @@
             <button type="button" id="detalleEditar">✏️ Editar</button>
             <button type="button" id="detalleHistorial">🕘 Historial</button>
         </div>
-    </div>
-</div>
-
-<div id="panelExtraModal" class="modal" role="dialog" aria-modal="true" aria-label="Información del inventario">
-    <div class="modal-card extra-card">
-        <div class="modal-header">
-            <div><h2 id="extraTitulo">Información</h2><p id="extraSubtitulo">Consulta de inventario</p></div>
-            <button type="button" id="cerrarExtra" class="modal-close" aria-label="Cerrar">×</button>
-        </div>
-        <div id="extraContenido" class="extra-contenido"></div>
     </div>
 </div>
 
@@ -284,6 +276,16 @@
             <button type="button" id="btnConfirmarMovimiento">Confirmar</button>
             <button type="button" id="btnCancelarMovimiento" class="btn-cancelar">Cancelar</button>
         </div>
+    </div>
+</div>
+
+<div id="panelExtraModal" class="modal" role="dialog" aria-modal="true" aria-label="Información del inventario">
+    <div class="modal-card extra-card">
+        <div class="modal-header">
+            <div><h2 id="extraTitulo">Información</h2><p id="extraSubtitulo">Consulta de inventario</p></div>
+            <button type="button" id="cerrarExtra" class="modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <div id="extraContenido" class="extra-contenido"></div>
     </div>
 </div>
 
