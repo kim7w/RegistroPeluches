@@ -237,3 +237,20 @@ html, body { overflow-x:hidden; }
 #reader{width:100%;min-height:230px;overflow:hidden;border-radius:16px;background:#111;position:relative}#reader video{display:block!important;width:100%!important;height:auto!important;min-height:230px!important;object-fit:cover!important;border-radius:16px}.scanner-estado{position:relative;z-index:2}
 @media(max-width:800px){.ingreso-fila{grid-template-columns:1fr 1fr}.fila-barcode{grid-column:1/-1}.ingreso-acciones{grid-template-columns:1fr}.ingreso-card{max-height:96vh}.ingreso-filas{max-height:58vh}}
 @media(max-width:600px){.extra-grid{grid-template-columns:1fr 1fr}.extra-item img,.extra-item .sin-foto{width:52px;height:52px;flex-basis:52px}}
+
+
+/* ===== Mejoras v3 ===== */
+#estadoSincronizacion{font-size:.78em;font-weight:800}
+.scanner-controles{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.scanner-controles button{border:0;border-radius:12px;padding:10px 14px;font-weight:800;cursor:pointer}
+#reader{width:100%;max-width:520px;margin:0 auto;overflow:hidden;border-radius:18px;background:#111;min-height:260px}
+#reader video{display:block!important;width:100%!important;height:auto!important;min-height:260px!important;object-fit:cover!important;border-radius:18px}
+#reader__scan_region{min-height:260px!important;display:flex!important;align-items:center!important;justify-content:center!important;position:relative!important}
+#reader__scan_region img{display:none!important}
+#reader__dashboard{padding:8px!important}
+#reader__dashboard_section_csr button{border-radius:10px!important;padding:8px 12px!important}
+.scanner-controles button:disabled{opacity:.5}
+.transferencia-campos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media(max-width:600px){.transferencia-campos{grid-template-columns:1fr}}
+
+.busqueda-reciente{width:100%;text-align:left;cursor:pointer}
