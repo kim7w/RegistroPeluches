@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260908-01">
+    <link rel="stylesheet" href="style.css?v=20260825-05">
 </head>
 <body>
 <div class="contenedor" id="topPagina">
@@ -34,8 +34,8 @@
         <button type="button" data-menu-action="favoritos">⭐ <span>Favoritos</span><b id="menuTotalFavoritos">0</b></button>
         <button type="button" data-menu-action="ingresos">📦 <span>Historial de ingresos</span></button>
         <button type="button" data-menu-action="precios">🏷️ <span>Historial de precios</span></button>
-<button type="button" data-menu-action="resumenHoy">📅 <span>Resumen de hoy</span></button>
-<button type="button" data-menu-action="busquedas">🔎 <span>Búsquedas recientes</span></button>
+        <button type="button" data-menu-action="resumenHoy">📅 <span>Resumen de hoy</span></button>
+        <button type="button" data-menu-action="busquedas">🔎 <span>Búsquedas recientes</span></button>
         <button type="button" id="btnMenuModoRapido" data-menu-action="rapido" aria-pressed="false" onclick="alternarModoRapido()">⚡ <span>Modo trabajo rápido</span><b id="menuModoRapido">OFF</b></button>
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="bajo">⚠️ <span>Inventario bajo</span><b id="menuTotalBajo">0</b></button>
@@ -54,7 +54,7 @@
         <div class="encabezado-icono">🧸</div>
         <div class="encabezado-titulo">
             <h1>Registro de Peluches de Kim 💜</h1>
-            <span>Control de inventario · <b id="estadoSincronizacion">🟢 Conectado</b></span>
+            <span>Control de inventario</span>
         </div>
     </header>
 
@@ -263,8 +263,6 @@
         <div class="detalle-botones">
             <button type="button" id="detalleEntrada">➕ Entrada</button>
             <button type="button" id="detalleSalida">➖ Salida</button>
-            <button type="button" id="detalleTransferir">🔄 Transferir</button>
-            <button type="button" id="detalleDeshacer">↩️ Deshacer</button>
             <button type="button" id="detalleEditar">✏️ Editar</button>
             <button type="button" id="detalleHistorial">🕘 Historial</button>
         </div>
@@ -311,14 +309,6 @@
                 <option value="bodega">Bodega</option>
             </select>
         </label>
-        <div id="transferenciaCampos" class="transferencia-campos" hidden>
-            <label>Desde
-                <select id="transferenciaOrigen"><option value="local">Local</option><option value="bodega">Bodega</option></select>
-            </label>
-            <label>Hacia
-                <select id="transferenciaDestino"><option value="bodega">Bodega</option><option value="local">Local</option></select>
-            </label>
-        </div>
         <div class="movimiento-botones">
             <button type="button" id="btnConfirmarMovimiento">Confirmar</button>
             <button type="button" id="btnCancelarMovimiento" class="btn-cancelar">Cancelar</button>
@@ -334,9 +324,8 @@
     <div id="contadorImagenes" class="contador-imagenes"></div>
 </div>
 
-<input type="file" id="archivoImportar" accept="application/json,.json" hidden>
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script type="module" src="script.js?v=20260908-01"></script>
+<script type="module" src="script.js?v=20260909-stable"></script>
 </body>
 </html>
