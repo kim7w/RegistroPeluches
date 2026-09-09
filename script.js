@@ -6,7 +6,11 @@ import {
     getDocs,
     deleteDoc,
     doc,
-    updateDoc
+    updateDoc,
+    writeBatch,
+    doc as firestoreDoc,
+    initializeFirestore,
+    persistentLocalCache
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -20,7 +24,15 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let db;
+try {
+    // Caché persistente: conserva lecturas/escrituras pendientes aunque cierres la página
+    // y permite que Firestore sincronice al recuperar conexión.
+    db = initializeFirestore(app, { localCache: persistentLocalCache() });
+} catch (e) {
+    console.warn("No se pudo activar caché persistente; se usa Firestore normal.", e);
+    db = getFirestore(app);
+}
 
 const CLOUDINARY_UPLOAD = "https://api.cloudinary.com/v1_1/vspx5rke/image/upload";
 const CLOUDINARY_PRESET = "peluches";
@@ -613,44 +625,74 @@ function mostrarPeluches(datos) {
     actualizarSeleccionUI();
 }
 
-async function cargarPeluches() {
+
+const INVENTARIO_CACHE_KEY = "registroPeluches_inventario_cache_v3";
+const BUSQUEDAS_KEY = "registroPeluches_busquedas_v1";
+let camaraFacingMode = "environment";
+let linternaActiva = false;
+let scannerTrack = null;
+let movimientoTransferencia = false;
+
+function guardarCacheInventario() {
     try {
-        if (lista) {
-            lista.innerHTML = `
-                <div class="sin-resultados">
-                    <div>⏳</div>
-                    <p>Cargando inventario...</p>
-                </div>
-            `;
-        }
+        localStorage.setItem(INVENTARIO_CACHE_KEY, JSON.stringify({
+            version: 3, guardado: new Date().toISOString(), peluches
+        }));
+    } catch (e) { console.warn("No se pudo guardar caché de inventario", e); }
+}
+function cargarCacheInventario() {
+    try {
+        const raw=localStorage.getItem(INVENTARIO_CACHE_KEY);
+        const data=raw?JSON.parse(raw):null;
+        return Array.isArray(data?.peluches)?data.peluches:[];
+    } catch(e){ return []; }
+}
+function actualizarEstadoConexion(estado) {
+    const el=document.getElementById("estadoSincronizacion");
+    if(!el) return;
+    el.textContent = estado==="offline" ? "🔴 Sin conexión · guardado local" :
+                     estado==="guardando" ? "🟡 Guardando…" : "🟢 Sincronizado";
+}
+window.addEventListener("offline",()=>actualizarEstadoConexion("offline"));
+window.addEventListener("online",()=>{actualizarEstadoConexion("guardando"); cargarPeluches();});
+function registrarBusquedaReciente(valor){
+    const q=String(valor||"").trim();
+    if(!q)return;
+    try{
+        let a=JSON.parse(localStorage.getItem(BUSQUEDAS_KEY)||"[]");
+        a=[q,...a.filter(x=>normalizar(x)!==normalizar(q))].slice(0,10);
+        localStorage.setItem(BUSQUEDAS_KEY,JSON.stringify(a));
+    }catch(e){}
+}
+function obtenerBusquedasRecientes(){
+    try{const a=JSON.parse(localStorage.getItem(BUSQUEDAS_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}
+}
 
-        const consulta = await getDocs(
-            collection(db, "peluches")
-        );
-
+async function cargarPeluches() {
+    actualizarEstadoConexion(navigator.onLine ? "guardando" : "offline");
+    if (lista) lista.innerHTML = `<div class="sin-resultados"><div>⏳</div><p>Cargando inventario...</p></div>`;
+    try {
+        const consulta = await getDocs(collection(db, "peluches"));
         peluches = [];
-
-        consulta.forEach(d => {
-            peluches.push({
-                id: d.id,
-                ...d.data()
-            });
-        });
-
+        consulta.forEach(d => peluches.push({ id: d.id, ...d.data() }));
+        guardarCacheInventario();
         actualizarResumen();
         actualizarInterfazBusqueda();
-
+        actualizarMenuFavoritos?.();
+        actualizarEstadoConexion("ok");
     } catch (error) {
         console.error("Error cargando inventario:", error);
-
-        if (lista) {
-            lista.innerHTML = `
-                <div class="sin-resultados">
-                    <div>⚠️</div>
-                    <h3>No se pudo cargar el inventario</h3>
-                    <p>Revisa tu conexión e inténtalo de nuevo.</p>
-                </div>
-            `;
+        const cache = cargarCacheInventario();
+        if (cache.length) {
+            peluches = cache;
+            actualizarResumen();
+            actualizarInterfazBusqueda();
+            actualizarMenuFavoritos?.();
+            actualizarEstadoConexion("offline");
+            if (lista) lista.insertAdjacentHTML("afterbegin",
+                `<div class="scanner-estado">⚠️ Mostrando la última copia guardada en este teléfono. Se sincronizará al volver la conexión.</div>`);
+        } else if (lista) {
+            lista.innerHTML = `<div class="sin-resultados"><div>⚠️</div><h3>No se pudo cargar el inventario</h3><p>Revisa tu conexión e inténtalo de nuevo.</p></div>`;
         }
     }
 }
@@ -1062,6 +1104,7 @@ async function guardarFormulario(e) {
             });
         }
 
+        guardarCacheInventario();
         actualizarResumen();
         actualizarInterfazBusqueda();
 
@@ -1463,8 +1506,10 @@ async function actualizarCantidad(
     p.movimientos =
         datosActualizar.movimientos;
 
+    guardarCacheInventario();
     actualizarResumen();
     actualizarInterfazBusqueda();
+    guardarCacheInventario();
 }
 
 function abrirMovimiento(id, tipo) {
@@ -1550,12 +1595,28 @@ function abrirMovimiento(id, tipo) {
     );
 }
 
+
+function abrirTransferencia(id){
+    const p=peluches.find(x=>x.id===id); if(!p)return;
+    movimientoId=id; movimientoTipo="transferencia"; movimientoTransferencia=true;
+    document.getElementById("movimientoTitulo").textContent="🔄 Transferir Local ↔ Bodega";
+    document.getElementById("movimientoProducto").textContent=p.nombre||"Producto";
+    actualizarResumenMovimiento(p);
+    document.getElementById("movimientoCantidad").value=1;
+    document.getElementById("transferenciaCampos").hidden=false;
+    document.getElementById("movimientoDestinoLabel").style.display="none";
+    document.getElementById("movimientoModal")?.classList.add("abierto");
+}
+
 function cerrarMovimiento() {
     document
         .getElementById("movimientoModal")
         ?.classList.remove("abierto");
 
     movimientoId = null;
+    movimientoTransferencia = false;
+    document.getElementById("transferenciaCampos")?.setAttribute("hidden","");
+    const dl=document.getElementById("movimientoDestinoLabel"); if(dl) dl.style.display="";
 }
 
 document
@@ -1586,11 +1647,22 @@ document
             if (!p) return;
 
             const cantidad =
-                Number(
-                    document.getElementById(
-                        "movimientoCantidad"
-                    )?.value
-                );
+                Number(document.getElementById("movimientoCantidad")?.value);
+            if (movimientoTransferencia) {
+                const origen=document.getElementById("transferenciaOrigen")?.value;
+                const destino=document.getElementById("transferenciaDestino")?.value;
+                if(origen===destino){alert("El origen y destino deben ser diferentes.");return;}
+                const pActual=peluches.find(x=>x.id===movimientoId);
+                const origenCant=origen==="local"?obtenerCantidadLocal(pActual):obtenerCantidadBodega(pActual);
+                if(cantidad<1 || cantidad>origenCant){alert(`No hay suficientes unidades en ${origen}. Disponibles: ${origenCant}.`);return;}
+                let local=obtenerCantidadLocal(pActual), bodega=obtenerCantidadBodega(pActual);
+                if(origen==="local"){local-=cantidad;bodega+=cantidad;}else{bodega-=cantidad;local+=cantidad;}
+                const mov={tipo:"transferencia",origen,destino,cantidad,antesLocal:obtenerCantidadLocal(pActual),antesBodega:obtenerCantidadBodega(pActual),despuesLocal:local,despuesBodega:bodega,antesTotal:obtenerCantidad(pActual),despuesTotal:local+bodega,fecha:new Date().toISOString()};
+                const movimientos=Array.isArray(pActual.movimientos)?[...pActual.movimientos,mov]:[mov];
+                await updateDoc(doc(db,"peluches",movimientoId),{cantidad:local+bodega,cantidadLocal:local,cantidadBodega:bodega,estado:(local+bodega)<=0?"Agotado":((local+bodega)<=obtenerMinimo(pActual)?"Poco inventario":"Disponible"),ultimoMovimiento:mov,movimientos:movimientos.slice(-50)});
+                pActual.cantidad=local+bodega;pActual.cantidadLocal=local;pActual.cantidadBodega=bodega;pActual.estado=estadoPeluche(pActual);pActual.ultimoMovimiento=mov;pActual.movimientos=movimientos.slice(-50);
+                guardarCacheInventario();actualizarResumen();actualizarInterfazBusqueda();cerrarMovimiento();return;
+            }
 
             const destino =
                 document.getElementById(
@@ -1932,7 +2004,7 @@ async function abrirScanner() {
         scannerActivo = true;
 
         await scanner.start(
-            { facingMode: "environment" },
+            { facingMode: camaraFacingMode },
             {
                 fps: 10,
                 qrbox: {
@@ -1951,6 +2023,12 @@ async function abrirScanner() {
             estado.textContent =
                 "Cámara activa. Apunta al código. También leeré códigos impresos como >ZDB-P4107.";
         }
+
+        try {
+            const video = document.querySelector("#reader video");
+            scannerTrack = video?.srcObject?.getVideoTracks?.()[0] || null;
+            actualizarControlesLinterna();
+        } catch(e) {}
 
         // La etiqueta de la foto es texto, no un código de barras.
         // Por eso iniciamos OCR además del lector tradicional.
@@ -1993,6 +2071,8 @@ async function cerrarScanner() {
         } catch (e) {}
     }
 
+    scannerTrack = null;
+    linternaActiva = false;
     scanner = null;
     scannerActivo = false;
     scannerDestinoIngresoFila = null;
@@ -2005,6 +2085,28 @@ async function cerrarScanner() {
     }
 }
 
+
+function actualizarControlesLinterna(){
+    const b=document.getElementById("btnLinterna");
+    const puede=!!scannerTrack?.getCapabilities?.().torch;
+    if(b){b.disabled=!puede;b.textContent=linternaActiva?"💡 Apagar linterna":"💡 Linterna";}
+}
+async function alternarLinterna(){
+    try{
+        if(!scannerTrack) return;
+        const caps=scannerTrack.getCapabilities?.()||{};
+        if(!caps.torch) return;
+        linternaActiva=!linternaActiva;
+        await scannerTrack.applyConstraints({advanced:[{torch:linternaActiva}]});
+        actualizarControlesLinterna();
+    }catch(e){console.warn("Linterna no disponible",e);}
+}
+async function cambiarCamara(){
+    if(!scannerActivo){camaraFacingMode=camaraFacingMode==="environment"?"user":"environment";return;}
+    await cerrarScanner();
+    camaraFacingMode=camaraFacingMode==="environment"?"user":"environment";
+    setTimeout(()=>abrirScanner(),150);
+}
 function procesarCodigoEscaneado(codigo) {
     const valor = String(codigo ?? "")
         .replace(/[\r\n]+/g, " ")
@@ -2408,6 +2510,12 @@ document.getElementById("detalleSalida")?.addEventListener("click", () => {
     cerrarDetalle();
     abrirMovimiento(id, "salida");
 });
+document.getElementById("detalleTransferir")?.addEventListener("click", () => {
+    if (!detalleId) return; const id=detalleId; cerrarDetalle(); abrirTransferencia(id);
+});
+document.getElementById("detalleDeshacer")?.addEventListener("click", () => {
+    if (!detalleId) return; deshacerUltimoMovimiento(detalleId);
+});
 document.getElementById("detalleEditar")?.addEventListener("click", () => {
     if (!detalleId) return;
     const id = detalleId;
@@ -2415,6 +2523,25 @@ document.getElementById("detalleEditar")?.addEventListener("click", () => {
     editarPeluche(id);
 });
 
+
+
+document.getElementById("btnCambiarCamara")?.addEventListener("click", cambiarCamara);
+document.getElementById("btnLinterna")?.addEventListener("click", alternarLinterna);
+
+
+async function deshacerUltimoMovimiento(id){
+    const p=peluches.find(x=>x.id===id); if(!p)return;
+    const mov=p.ultimoMovimiento || (Array.isArray(p.movimientos)?p.movimientos.at(-1):null);
+    if(!mov){alert("Este peluche no tiene un movimiento para deshacer.");return;}
+    if(!confirm("¿Deshacer el último movimiento de este peluche?"))return;
+    const local=numeroSeguro(mov.antesLocal), bodega=numeroSeguro(mov.antesBodega);
+    const historial=Array.isArray(p.movimientos)?p.movimientos.slice(0,-1):[];
+    const datos={cantidad:local+bodega,cantidadLocal:local,cantidadBodega:bodega,estado:(local+bodega)<=0?"Agotado":((local+bodega)<=obtenerMinimo(p)?"Poco inventario":"Disponible"),ultimoMovimiento:historial.at(-1)||null,movimientos:historial};
+    try{
+        await updateDoc(doc(db,"peluches",id),datos);
+        Object.assign(p,datos);guardarCacheInventario();actualizarResumen();actualizarInterfazBusqueda();alert("↩️ Movimiento deshecho correctamente.");
+    }catch(e){alert("No se pudo deshacer el movimiento.");console.error(e);}
+}
 
 // ===== NUEVO INGRESO POR LOTE =====
 const BORRADOR_INGRESO_KEY = "registroPeluches_borrador_ingreso_v1";
@@ -2445,7 +2572,7 @@ function crearFilaIngreso(datos = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ingreso-fila";
     wrap.innerHTML = `
-        <input class="fila-codigo" placeholder="Código / costo" value="${escaparHTML(datos.codigo || "")}">
+        <input class="fila-codigo" placeholder="Código" value="${escaparHTML(datos.codigo || "")}">
         <input class="fila-nombre" placeholder="Nombre del peluche" value="${escaparHTML(datos.nombre || "")}">
         <input class="fila-precio" type="number" min="0" step="0.01" placeholder="Precio" value="${escaparHTML(datos.precio ?? "")}">
         <div class="fila-barcode"><input class="fila-etiqueta" placeholder="Código de barras" value="${escaparHTML(datos.etiqueta || "")}"><button type="button" class="fila-escanear" title="Escanear código de barras">📷</button></div>
@@ -2552,56 +2679,69 @@ async function guardarNuevoIngreso() {
     }
     const btn = document.getElementById("btnGuardarIngreso");
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Guardando ingreso..."; }
+    actualizarEstadoConexion("guardando");
     try {
-        const usadas = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
-        const nuevos = [];
-        for (let i = 0; i < filas.length; i++) {
+        const existentes = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
+        const loteId = `lote-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+        const datosNuevos = [];
+
+        for (let i=0;i<filas.length;i++) {
             const base = datosFilas[i];
             let etiquetaFinal = normalizar(base.etiqueta);
             if (!etiquetaFinal) {
-                let n = 1;
-                do { etiquetaFinal = `sin-${String(n).padStart(5, "0")}`; n++; } while (usadas.has(etiquetaFinal));
-                base.etiqueta = etiquetaFinal.toUpperCase();
+                let n=1;
+                do { etiquetaFinal=`sin-${String(n).padStart(5,"0")}`; n++; } while(existentes.has(etiquetaFinal));
+                base.etiqueta=etiquetaFinal.toUpperCase();
             }
-            if (usadas.has(normalizar(base.etiqueta))) throw new Error(`El código de barras / etiqueta "${base.etiqueta}" está repetido en el ingreso o ya existe.`);
-            const archivos = filas[i].querySelector(".fila-foto")?.files;
-            let fotos = [];
-            if (archivos?.length) {
-                fotos = (await Promise.all([...archivos].map(subirImagenCloudinary))).filter(Boolean);
-            } else {
-                try { fotos = JSON.parse(filas[i].dataset.fotos || "[]"); } catch(e) { fotos = []; }
+            if (existentes.has(normalizar(base.etiqueta))) {
+                throw new Error(`El código "${base.etiqueta}" está repetido o ya existe.`);
             }
-            const cantidadLocal = base.cantidadLocal;
-            const cantidadBodega = base.cantidadBodega;
-            const cantidad = cantidadLocal + cantidadBodega;
-            const loteId = window.__ingresoLoteId || (window.__ingresoLoteId = `lote-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
-            const datos = {
-                codigo: base.codigo, nombre: base.nombre, precio: base.precio, etiqueta: base.etiqueta,
-                tamano: base.tamano, cantidad, cantidadLocal, cantidadBodega, minimo: base.minimo,
-                observaciones: base.observaciones, foto: fotos[0] || "", fotos, fechaIngreso: fecha,
-                fechaRegistro: new Date().toISOString(),
-                ingresoId: loteId, tipoIngreso: "lote",
-                historialPrecios: [{ precio: Number(base.precio), fecha: new Date().toISOString() }],
-                ingresoLote: true, loteIngresoFecha: fecha,
-                estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
+            let fotos=[];
+            const archivos=filas[i].querySelector(".fila-foto")?.files;
+            if (archivos?.length) fotos=(await Promise.all([...archivos].map(subirImagenCloudinary))).filter(Boolean);
+            else { try{fotos=JSON.parse(filas[i].dataset.fotos||"[]")}catch(e){fotos=[]} }
+            const cantidadLocal=base.cantidadLocal, cantidadBodega=base.cantidadBodega, cantidad=cantidadLocal+cantidadBodega;
+            const fechaRegistro=new Date().toISOString();
+            const datos={
+                codigo:base.codigo,nombre:base.nombre,precio:base.precio,etiqueta:base.etiqueta,
+                tamano:base.tamano,medida:base.tamano,cantidad,cantidadLocal,cantidadBodega,minimo:base.minimo,
+                observaciones:base.observaciones,foto:fotos[0]||"",fotos,fechaIngreso:fecha,fechaRegistro,
+                ingresoId:loteId,tipoIngreso:"lote",historialPrecios:[{precio:Number(base.precio),fecha:fechaRegistro}],
+                ingresoLote:true,loteIngresoFecha:fecha,
+                estado:cantidad<=0?"Agotado":(cantidad<=base.minimo?"Poco inventario":"Disponible"),
+                movimientos:[]
             };
-            const nuevo = await addDoc(collection(db, "peluches"), datos);
-            nuevos.push({id: nuevo.id, ...datos});
-            usadas.add(normalizar(base.etiqueta));
+            datosNuevos.push(datos);
+            existentes.add(normalizar(base.etiqueta));
         }
-        peluches = [...nuevos, ...peluches];
+
+        // Un solo commit: todos los peluches del ingreso se guardan juntos.
+        const batch = writeBatch(db);
+        const refs = [];
+        datosNuevos.forEach(datos => {
+            const ref = firestoreDoc(collection(db,"peluches"));
+            batch.set(ref, datos);
+            refs.push({id:ref.id,...datos});
+        });
+        await batch.commit();
+
+        peluches = [...refs, ...peluches];
+        guardarCacheInventario();
         actualizarResumen();
         actualizarInterfazBusqueda();
         borrarBorradorIngreso();
-        window.__ingresoLoteId = null;
+        window.__ingresoLoteId=null;
         cerrarNuevoIngreso();
-        alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos registrados: ${nuevos.length}\n📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}\n📅 Fecha: ${fecha}`);
-    } catch (error) {
-        console.error("Error guardando ingreso:", error);
-        alert(`No se pudo completar el ingreso.\n\n${error.message || "Revisa tu conexión e inténtalo nuevamente."}\n\nEl borrador se conserva para que no pierdas el avance.`);
+        actualizarEstadoConexion("ok");
+        alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos: ${refs.length}\n📦 Unidades: ${refs.reduce((s,p)=>s+obtenerCantidad(p),0)}\n📅 Fecha: ${fecha}`);
+    } catch(error) {
+        console.error("Error guardando ingreso:",error);
         guardarBorradorIngreso();
+        guardarCacheInventario();
+        actualizarEstadoConexion(navigator.onLine ? "guardando" : "offline");
+        alert(`No se pudo completar el ingreso.\n\n${error.message||"Se conservará el avance."}\n\n💾 El borrador queda guardado.`);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "💾 Guardar todo el ingreso"; }
+        if(btn){btn.disabled=false;btn.textContent="💾 Guardar todo el ingreso";}
     }
 }
 
@@ -2767,16 +2907,15 @@ function abrirHistorial(id = null) {
     } else {
         contenido.innerHTML = movimientos.map(m => {
             const esEntrada = m.tipo === "entrada";
+            const esTransferencia = m.tipo === "transferencia";
             return `<div class="historial-item">
-                <strong>${esEntrada ? "➕ Entrada" : "➖ Salida"} · ${escaparHTML(m.producto)}</strong>
-                <span>${esEntrada ? "Se agregaron" : "Se retiraron"} <b>${numeroSeguro(m.cantidad)}</b> unidad(es) ${m.destino ? `en ${escaparHTML(m.destino)}` : ""}.</span>
+                <strong>${esTransferencia ? "🔄 Transferencia" : (esEntrada ? "➕ Entrada" : "➖ Salida")} · ${escaparHTML(m.producto)}</strong>
+                <span>${esTransferencia ? `Se movieron <b>${numeroSeguro(m.cantidad)}</b> unidad(es) de ${escaparHTML(m.origen || "")} a ${escaparHTML(m.destino || "")}.` : `${esEntrada ? "Se agregaron" : "Se retiraron"} <b>${numeroSeguro(m.cantidad)}</b> unidad(es) ${m.destino ? `en ${escaparHTML(m.destino)}` : ""}.`}</span>
                 ${!id && m.codigo ? `<span>🏷️ ${escaparHTML(m.codigo)}</span>` : ""}
                 <small>${formatearFechaHistorial(m.fecha)}</small>
             </div>`;
         }).join("");
     }
-    modal.classList.add("abierto");
-}
 
 function cerrarHistorial() {
     document.getElementById("historialModal")?.classList.remove("abierto");
@@ -2928,6 +3067,20 @@ function abrirPanelExtra(tipo){
    const conCambios=peluches.filter(p=>Array.isArray(p.historialPrecios)&&p.historialPrecios.length>1);
    cont.innerHTML=conCambios.length?conCambios.sort((a,b)=>new Date(b.historialPrecios.at(-1)?.fecha||0)-new Date(a.historialPrecios.at(-1)?.fecha||0)).map(p=>`<div class="extra-item"><div class="sin-foto">🏷️</div><div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"")} · ${escaparHTML(p.etiqueta||"")}</small><div class="precio-historial">${p.historialPrecios.slice().reverse().map(h=>`<div class="precio-item"><span>Q${escaparHTML(h.precio)}</span><small>${formatearFechaHistorial(h.fecha)}</small></div>`).join("")}</div></div></div>`).join(""):`<div class="extra-item"><strong>🏷️ No hay cambios de precio registrados todavía.</strong><small>Cuando modifiques el precio de un peluche se guardará el anterior.</small></div>`;
  }
+ } else if(tipo==="resumenHoy"){
+   title.textContent="📅 Resumen de hoy"; sub.textContent="Actividad registrada durante el día";
+   const hoy=fechaHoyLocal();
+   const ingresados=peluches.filter(p=>(p.fechaIngreso||"")===hoy);
+   const movimientos=peluches.flatMap(p=>Array.isArray(p.movimientos)?p.movimientos.map(m=>({...m,nombre:p.nombre})):[]).filter(m=>String(m.fecha||"").slice(0,10)===hoy);
+   const entradas=movimientos.filter(m=>m.tipo==="entrada").reduce((s,m)=>s+numeroSeguro(m.cantidad),0);
+   const salidas=movimientos.filter(m=>m.tipo==="salida").reduce((s,m)=>s+numeroSeguro(m.cantidad),0);
+   cont.innerHTML=`<div class="extra-grid"><div class="extra-stat"><strong>${ingresados.length}</strong><span>Tipos ingresados hoy</span></div><div class="extra-stat"><strong>${ingresados.reduce((s,p)=>s+obtenerCantidad(p),0)}</strong><span>Unidades de esos ingresos</span></div><div class="extra-stat"><strong>${entradas}</strong><span>Unidades en entradas</span></div><div class="extra-stat"><strong>${salidas}</strong><span>Unidades en salidas</span></div></div>`;
+ } else if(tipo==="busquedas"){
+   title.textContent="🔎 Búsquedas recientes"; sub.textContent="Últimos términos usados en el buscador";
+   const arr=obtenerBusquedasRecientes();
+   cont.innerHTML=arr.length?arr.map(q=>`<button type="button" class="extra-item busqueda-reciente" data-busqueda="${escaparHTML(q)}">🔎 <strong>${escaparHTML(q)}</strong></button>`).join(""):`<div class="extra-item"><strong>No hay búsquedas recientes.</strong></div>`;
+   cont.querySelectorAll("[data-busqueda]").forEach(b=>b.addEventListener("click",()=>{buscar.value=b.dataset.busqueda||"";filtroActivo="todos";actualizarInterfazBusqueda();cerrarPanelExtra();desplazarA("seccionPeluches");}));
+
  modal.classList.add("abierto");
 }
 function itemExtra(p,fav=false){const foto=obtenerFotos(p)[0];return `<div class="extra-item" data-extra-id="${escaparHTML(p.id)}">${foto?`<img src="${escaparHTML(foto)}" alt="">`:`<div class="sin-foto">🧸</div>`}<div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"Sin código")} · ${escaparHTML(p.tamano||p.medida||"Sin medida")}</small></div><button type="button" class="favorito-btn ${fav?"favorito-activo":""}" data-fav-id="${escaparHTML(p.id)}">${fav?"⭐":"☆"}</button></div>`}
@@ -2940,6 +3093,12 @@ const _abrirDetalleOriginal=abrirDetalle;
 abrirDetalle=function(id){_abrirDetalleOriginal(id); const p=peluches.find(x=>x.id===id); const cont=document.getElementById("detalleContenido"); if(!p||!cont)return; const b=document.createElement("button"); b.type="button"; b.className="favorito-btn"; b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos"; b.onclick=()=>{alternarFavorito(id); b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos";}; cont.appendChild(b);};
 
 // Extiende las acciones del menú sin romper las anteriores.
-document.querySelectorAll("[data-menu-action]").forEach(btn=>btn.addEventListener("click",()=>{const a=btn.dataset.menuAction; if(a==="estadisticas"){cerrarMenuPrincipal();abrirPanelExtra("estadisticas");} else if(a==="favoritos"){cerrarMenuPrincipal();abrirPanelExtra("favoritos");} else if(a==="ingresos"){cerrarMenuPrincipal();abrirPanelExtra("ingresos");} else if(a==="precios"){cerrarMenuPrincipal();abrirPanelExtra("precios");}}));
+document.querySelectorAll("[data-menu-action]").forEach(btn=>btn.addEventListener("click",()=>{const a=btn.dataset.menuAction; if(a==="estadisticas"){cerrarMenuPrincipal();abrirPanelExtra("estadisticas");} else if(a==="favoritos"){cerrarMenuPrincipal();abrirPanelExtra("favoritos");} else if(a==="ingresos"){cerrarMenuPrincipal();abrirPanelExtra("ingresos");} else if(a==="precios"){cerrarMenuPrincipal();abrirPanelExtra("precios");} else if(a==="resumenHoy"){cerrarMenuPrincipal();abrirPanelExtra("resumenHoy");} else if(a==="busquedas"){cerrarMenuPrincipal();abrirPanelExtra("busquedas");}}));
 
 actualizarMenuFavoritos();
+
+
+// ===== Inicialización y respaldo local =====
+window.addEventListener("beforeunload", () => {
+    try { guardarCacheInventario(); } catch(e) {}
+});
