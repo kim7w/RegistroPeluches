@@ -1266,16 +1266,11 @@ async function importarRespaldo(archivo) {
             agregados++;
         }
 
-        alert(`Importación terminada.
-
-✅ Agregados: ${agregados}
-⏭️ Omitidos por duplicado o datos incompletos: ${omitidos}`);
+        alert(`Importación terminada.\n\n✅ Agregados: ${agregados}\n⏭️ Omitidos por duplicado o datos incompletos: ${omitidos}`);
         await cargarPeluches();
     } catch (error) {
         console.error("Error importando respaldo:", error);
-        alert(`No se pudo importar el respaldo.
-
-${error.message || "Archivo no válido."}`);
+        alert(`No se pudo importar el respaldo.\n\n${error.message || "Archivo no válido."}`);
     }
 }
 
@@ -1707,8 +1702,7 @@ function normalizarCodigoOCR(valor = "") {
         .toUpperCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[\r
-]+/g, " ")
+        .replace(/[\r\n]+/g, " ")
         .replace(/[|]/g, "I")
         .replace(/[—–−]/g, "-")
         .replace(/\s+/g, " ")
@@ -1749,8 +1743,7 @@ function extraerCodigoDesdeOCR(texto = "") {
     }
 
     const porLinea = textoLimpio
-        .split(/
-+/)
+        .split(/\n+/)
         .map(x => x.replace(/[^A-Z0-9>_-]/g, "").trim())
         .filter(Boolean);
 
@@ -2014,8 +2007,7 @@ async function cerrarScanner() {
 
 function procesarCodigoEscaneado(codigo) {
     const valor = String(codigo ?? "")
-        .replace(/[\r
-]+/g, " ")
+        .replace(/[\r\n]+/g, " ")
         .trim();
 
     if (!valor) return;
@@ -2555,9 +2547,7 @@ async function guardarNuevoIngreso() {
     const datosFilas = filas.map(datosFilaIngreso);
     const incompletos = datosFilas.filter(x => !x.codigo || !x.nombre || !x.precio);
     if (incompletos.length) {
-        alert(`Completa código, nombre y precio en todos los peluches.
-
-Filas incompletas: ${incompletos.length}`);
+        alert(`Completa código, nombre y precio en todos los peluches.\n\nFilas incompletas: ${incompletos.length}`);
         return;
     }
     const btn = document.getElementById("btnGuardarIngreso");
@@ -2605,18 +2595,10 @@ Filas incompletas: ${incompletos.length}`);
         borrarBorradorIngreso();
         window.__ingresoLoteId = null;
         cerrarNuevoIngreso();
-        alert(`✅ Ingreso guardado correctamente.
-
-🧸 Productos registrados: ${nuevos.length}
-📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}
-📅 Fecha: ${fecha}`);
+        alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos registrados: ${nuevos.length}\n📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}\n📅 Fecha: ${fecha}`);
     } catch (error) {
         console.error("Error guardando ingreso:", error);
-        alert(`No se pudo completar el ingreso.
-
-${error.message || "Revisa tu conexión e inténtalo nuevamente."}
-
-El borrador se conserva para que no pierdas el avance.`);
+        alert(`No se pudo completar el ingreso.\n\n${error.message || "Revisa tu conexión e inténtalo nuevamente."}\n\nEl borrador se conserva para que no pierdas el avance.`);
         guardarBorradorIngreso();
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "💾 Guardar todo el ingreso"; }
@@ -2871,9 +2853,9 @@ document.querySelectorAll("[data-menu-action]").forEach(boton => {
         if (accion === "bajo") return activarFiltroDesdeMenu("bajo");
         if (accion === "agotado") return activarFiltroDesdeMenu("agotado");
         if (accion === "historial") { abrirHistorial(); cerrarMenuPrincipal(); return; }
-        if (accion === "etiquetas") { cerrarMenuPrincipal(); document.getElementById("btnImprimir")?.click(); return; }
-        if (accion === "exportar") { cerrarMenuPrincipal(); document.getElementById("btnExportar")?.click(); return; }
-        if (accion === "importar") { cerrarMenuPrincipal(); document.getElementById("btnImportar")?.click(); return; }
+        if (accion === "etiquetas") { cerrarMenuPrincipal(); imprimirEtiquetas(); return; }
+        if (accion === "exportar") { cerrarMenuPrincipal(); exportarRespaldo(); return; }
+        if (accion === "importar") { cerrarMenuPrincipal(); document.getElementById("archivoImportar")?.click(); return; }
     });
 });
 
@@ -2908,7 +2890,7 @@ actualizarUltimosPeluches();
 
 
 // ============================================================
-// MEJORAS DEL INVENTARIO: estadísticas, favoritos, historial
+// MEJORAS DEL INVENTARIO, historial
 // de ingresos y precios. No incluye costos ni ganancias.
 // ============================================================
 const FAVORITOS_KEY = "registroPeluches_favoritos_v1";
@@ -2921,15 +2903,15 @@ function abrirPanelExtra(tipo){
  const modal=document.getElementById("panelExtraModal"), title=document.getElementById("extraTitulo"), sub=document.getElementById("extraSubtitulo"), cont=document.getElementById("extraContenido");
  if(!modal||!cont) return;
  const set=obtenerFavoritos();
- if(tipo==="estadisticas"){
+ if(tipo==="ultimos"){
+   title.textContent="🆕 Últimos peluches"; sub.textContent="Los productos ingresados más recientemente";
+   const recientes=peluches.slice().sort((a,b)=>new Date(b.fechaRegistro||b.fechaIngreso||0)-new Date(a.fechaRegistro||a.fechaIngreso||0)).slice(0,20);
+   cont.innerHTML=recientes.length?recientes.map(p=>itemExtra(p,false)).join(""):`<div class="extra-item"><strong>🧸 Aún no hay peluches registrados.</strong></div>`;
+   cont.querySelectorAll("[data-extra-id]").forEach(x=>x.addEventListener("click",()=>abrirDetalle(x.dataset.extraId)));
+ } else if(tipo==="estadisticas"){ 
    const unidades=peluches.reduce((s,p)=>s+obtenerCantidad(p),0), local=peluches.reduce((s,p)=>s+obtenerCantidadLocal(p),0), bodega=peluches.reduce((s,p)=>s+obtenerCantidadBodega(p),0), bajo=peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length, agot=peluches.filter(p=>estadoPeluche(p)==="Agotado").length;
    title.textContent="📊 Estadísticas"; sub.textContent="Resumen del inventario, sin ganancias";
    cont.innerHTML=`<div class="extra-grid"><div class="extra-stat"><strong>${peluches.length}</strong><span>Tipos de peluches</span></div><div class="extra-stat"><strong>${unidades}</strong><span>Unidades</span></div><div class="extra-stat"><strong>${local}</strong><span>En local</span></div><div class="extra-stat"><strong>${bodega}</strong><span>En bodega</span></div><div class="extra-stat"><strong>${bajo}</strong><span>Inventario bajo</span></div><div class="extra-stat"><strong>${agot}</strong><span>Agotados</span></div></div>`;
- } else if(tipo==="ultimos") {
-   title.textContent="🆕 Últimos peluches"; sub.textContent="Los registros agregados más recientemente";
-   const recientes=peluches.slice().sort((a,b)=>new Date(b.fechaRegistro||b.fechaIngreso||0)-new Date(a.fechaRegistro||a.fechaIngreso||0)).slice(0,30);
-   cont.innerHTML=recientes.length?recientes.map(p=>itemExtra(p,false)).join(""):`<div class="extra-item"><div class="sin-foto">🧸</div><div><strong>Aún no hay peluches registrados.</strong><small>Cuando agregues productos aparecerán aquí.</small></div></div>`;
-   cont.querySelectorAll("[data-extra-id]").forEach(x=>x.addEventListener("click",()=>abrirDetalle(x.dataset.extraId)));
  } else if(tipo==="favoritos"){
    title.textContent="⭐ Favoritos"; sub.textContent=`${set.size} peluche(s) marcado(s)`; const fav=peluches.filter(p=>set.has(p.id));
    cont.innerHTML=fav.length?fav.map(p=>itemExtra(p,true)).join(""):`<div class="extra-item"><div class="sin-foto">⭐</div><div><strong>No tienes favoritos todavía.</strong><small>Marca un peluche como favorito desde su detalle.</small></div></div>`;
