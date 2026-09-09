@@ -6,8 +6,7 @@ import {
     getDocs,
     deleteDoc,
     doc,
-    updateDoc,
-    writeBatch
+    updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -1267,11 +1266,16 @@ async function importarRespaldo(archivo) {
             agregados++;
         }
 
-        alert(`Importación terminada.\n\n✅ Agregados: ${agregados}\n⏭️ Omitidos por duplicado o datos incompletos: ${omitidos}`);
+        alert(`Importación terminada.
+
+✅ Agregados: ${agregados}
+⏭️ Omitidos por duplicado o datos incompletos: ${omitidos}`);
         await cargarPeluches();
     } catch (error) {
         console.error("Error importando respaldo:", error);
-        alert(`No se pudo importar el respaldo.\n\n${error.message || "Archivo no válido."}`);
+        alert(`No se pudo importar el respaldo.
+
+${error.message || "Archivo no válido."}`);
     }
 }
 
@@ -1703,7 +1707,8 @@ function normalizarCodigoOCR(valor = "") {
         .toUpperCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[\r\n]+/g, " ")
+        .replace(/[\r
+]+/g, " ")
         .replace(/[|]/g, "I")
         .replace(/[—–−]/g, "-")
         .replace(/\s+/g, " ")
@@ -1744,7 +1749,8 @@ function extraerCodigoDesdeOCR(texto = "") {
     }
 
     const porLinea = textoLimpio
-        .split(/\n+/)
+        .split(/
++/)
         .map(x => x.replace(/[^A-Z0-9>_-]/g, "").trim())
         .filter(Boolean);
 
@@ -2008,7 +2014,8 @@ async function cerrarScanner() {
 
 function procesarCodigoEscaneado(codigo) {
     const valor = String(codigo ?? "")
-        .replace(/[\r\n]+/g, " ")
+        .replace(/[\r
+]+/g, " ")
         .trim();
 
     if (!valor) return;
@@ -2446,7 +2453,7 @@ function crearFilaIngreso(datos = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ingreso-fila";
     wrap.innerHTML = `
-        <input class="fila-codigo" placeholder="Código" value="${escaparHTML(datos.codigo || "")}">
+        <input class="fila-codigo" placeholder="Código / costo" value="${escaparHTML(datos.codigo || "")}">
         <input class="fila-nombre" placeholder="Nombre del peluche" value="${escaparHTML(datos.nombre || "")}">
         <input class="fila-precio" type="number" min="0" step="0.01" placeholder="Precio" value="${escaparHTML(datos.precio ?? "")}">
         <div class="fila-barcode"><input class="fila-etiqueta" placeholder="Código de barras" value="${escaparHTML(datos.etiqueta || "")}"><button type="button" class="fila-escanear" title="Escanear código de barras">📷</button></div>
@@ -2545,133 +2552,72 @@ async function guardarNuevoIngreso() {
     const filas = [...document.querySelectorAll("#ingresoFilas .ingreso-fila")];
     const fecha = document.getElementById("ingresoFecha")?.value || fechaHoyLocal();
     if (!filas.length) return;
-
     const datosFilas = filas.map(datosFilaIngreso);
     const incompletos = datosFilas.filter(x => !x.codigo || !x.nombre || !x.precio);
     if (incompletos.length) {
-        alert(`Completa código, nombre y precio en todos los peluches.\n\nFilas incompletas: ${incompletos.length}`);
+        alert(`Completa código, nombre y precio en todos los peluches.
+
+Filas incompletas: ${incompletos.length}`);
         return;
     }
-
     const btn = document.getElementById("btnGuardarIngreso");
-    if (btn) { btn.disabled = true; btn.textContent = "⏳ Preparando ingreso..."; }
-
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Guardando ingreso..."; }
     try {
-        if (!navigator.onLine) {
-            throw new Error("El dispositivo aparece sin conexión a Internet. Conéctate y vuelve a intentarlo.");
-        }
-
         const usadas = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
-        const loteId = window.__ingresoLoteId || (window.__ingresoLoteId = `lote-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
         const nuevos = [];
-        const batch = writeBatch(db);
-        const ahora = new Date().toISOString();
-
-        // Primero preparamos TODOS los registros. No escribimos uno por uno:
-        // el lote se envía a Firestore en una sola operación para evitar que
-        // un fallo de red a mitad del ingreso deje el lote incompleto.
         for (let i = 0; i < filas.length; i++) {
             const base = datosFilas[i];
             let etiquetaFinal = normalizar(base.etiqueta);
-
             if (!etiquetaFinal) {
                 let n = 1;
-                do {
-                    etiquetaFinal = `sin-${String(n).padStart(5, "0")}`;
-                    n++;
-                } while (usadas.has(etiquetaFinal));
+                do { etiquetaFinal = `sin-${String(n).padStart(5, "0")}`; n++; } while (usadas.has(etiquetaFinal));
                 base.etiqueta = etiquetaFinal.toUpperCase();
             }
-
-            const clave = normalizar(base.etiqueta);
-            if (usadas.has(clave)) {
-                throw new Error(`El código de barras / etiqueta "${base.etiqueta}" está repetido en el ingreso o ya existe.`);
-            }
-
+            if (usadas.has(normalizar(base.etiqueta))) throw new Error(`El código de barras / etiqueta "${base.etiqueta}" está repetido en el ingreso o ya existe.`);
             const archivos = filas[i].querySelector(".fila-foto")?.files;
             let fotos = [];
-
             if (archivos?.length) {
-                if (btn) btn.textContent = `📸 Subiendo fotos (${i + 1}/${filas.length})...`;
                 fotos = (await Promise.all([...archivos].map(subirImagenCloudinary))).filter(Boolean);
             } else {
-                try {
-                    fotos = JSON.parse(filas[i].dataset.fotos || "[]");
-                } catch (e) {
-                    fotos = [];
-                }
+                try { fotos = JSON.parse(filas[i].dataset.fotos || "[]"); } catch(e) { fotos = []; }
             }
-
-            const cantidadLocal = Math.max(0, Math.floor(numeroSeguro(base.cantidadLocal)));
-            const cantidadBodega = Math.max(0, Math.floor(numeroSeguro(base.cantidadBodega)));
+            const cantidadLocal = base.cantidadLocal;
+            const cantidadBodega = base.cantidadBodega;
             const cantidad = cantidadLocal + cantidadBodega;
-            const ref = doc(collection(db, "peluches"));
-
+            const loteId = window.__ingresoLoteId || (window.__ingresoLoteId = `lote-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
             const datos = {
-                codigo: base.codigo,
-                nombre: base.nombre,
-                precio: base.precio,
-                etiqueta: base.etiqueta,
-                tamano: base.tamano,
-                cantidad,
-                cantidadLocal,
-                cantidadBodega,
-                minimo: base.minimo,
-                observaciones: base.observaciones,
-                foto: fotos[0] || "",
-                fotos,
-                fechaIngreso: fecha,
-                fechaRegistro: ahora,
-                ingresoId: loteId,
-                tipoIngreso: "lote",
-                historialPrecios: [{ precio: Number(base.precio), fecha: ahora }],
-                ingresoLote: true,
-                loteIngresoFecha: fecha,
+                codigo: base.codigo, nombre: base.nombre, precio: base.precio, etiqueta: base.etiqueta,
+                tamano: base.tamano, cantidad, cantidadLocal, cantidadBodega, minimo: base.minimo,
+                observaciones: base.observaciones, foto: fotos[0] || "", fotos, fechaIngreso: fecha,
+                fechaRegistro: new Date().toISOString(),
+                ingresoId: loteId, tipoIngreso: "lote",
+                historialPrecios: [{ precio: Number(base.precio), fecha: new Date().toISOString() }],
+                ingresoLote: true, loteIngresoFecha: fecha,
                 estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
             };
-
-            batch.set(ref, datos);
-            nuevos.push({ id: ref.id, ...datos });
-            usadas.add(clave);
+            const nuevo = await addDoc(collection(db, "peluches"), datos);
+            nuevos.push({id: nuevo.id, ...datos});
+            usadas.add(normalizar(base.etiqueta));
         }
-
-        if (btn) btn.textContent = "☁️ Guardando todo en la nube...";
-
-        // Reintenta brevemente errores transitorios de red.
-        let guardado = false;
-        let ultimoError = null;
-        for (let intento = 1; intento <= 3 && !guardado; intento++) {
-            try {
-                await batch.commit();
-                guardado = true;
-            } catch (error) {
-                ultimoError = error;
-                if (intento < 3) {
-                    await new Promise(resolve => setTimeout(resolve, 1000 * intento));
-                }
-            }
-        }
-
-        if (!guardado) throw ultimoError || new Error("No se pudo guardar el lote en Firebase.");
-
         peluches = [...nuevos, ...peluches];
         actualizarResumen();
         actualizarInterfazBusqueda();
         borrarBorradorIngreso();
         window.__ingresoLoteId = null;
         cerrarNuevoIngreso();
+        alert(`✅ Ingreso guardado correctamente.
 
-        alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos registrados: ${nuevos.length}\n📦 Unidades: ${nuevos.reduce((s,p) => s + obtenerCantidad(p), 0)}\n📅 Fecha: ${fecha}`);
+🧸 Productos registrados: ${nuevos.length}
+📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}
+📅 Fecha: ${fecha}`);
     } catch (error) {
-        console.error("Error guardando ingreso por lote:", error);
+        console.error("Error guardando ingreso:", error);
+        alert(`No se pudo completar el ingreso.
+
+${error.message || "Revisa tu conexión e inténtalo nuevamente."}
+
+El borrador se conserva para que no pierdas el avance.`);
         guardarBorradorIngreso();
-
-        let detalle = error?.message || "Revisa tu conexión e inténtalo nuevamente.";
-        if (detalle.toLowerCase().includes("failed to fetch")) {
-            detalle = "No se pudo comunicar con Firebase. Puede ser una conexión inestable, una pestaña sin conexión o un bloqueo temporal de la red.";
-        }
-
-        alert(`No se pudo completar el ingreso.\n\n${detalle}\n\n💾 El borrador se conserva para que no pierdas el avance.`);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "💾 Guardar todo el ingreso"; }
     }
@@ -2961,13 +2907,57 @@ document.addEventListener("keydown", e => {
 actualizarUltimosPeluches();
 
 
-// ============================================================\n// MEJORAS DEL INVENTARIO: estadísticas, favoritos, historial\n// de ingresos y precios. No incluye costos ni ganancias.\n// ============================================================\nconst FAVORITOS_KEY = "registroPeluches_favoritos_v1";\nfunction obtenerFavoritos(){ try { const a=JSON.parse(localStorage.getItem(FAVORITOS_KEY)||"[]"); return new Set(Array.isArray(a)?a:[]); } catch(e){ return new Set(); } }\nfunction guardarFavoritos(set){ localStorage.setItem(FAVORITOS_KEY, JSON.stringify([...set])); }\nfunction alternarFavorito(id){ const set=obtenerFavoritos(); set.has(id)?set.delete(id):set.add(id); guardarFavoritos(set); actualizarMenuFavoritos(); if(document.getElementById("panelExtraModal")?.classList.contains("abierto") && document.getElementById("extraTitulo")?.textContent.includes("Favoritos")) abrirPanelExtra("favoritos"); }\nfunction actualizarMenuFavoritos(){ const el=document.getElementById("menuTotalFavoritos"); if(el) el.textContent=obtenerFavoritos().size; }\n\nfunction abrirPanelExtra(tipo){\n const modal=document.getElementById("panelExtraModal"), title=document.getElementById("extraTitulo"), sub=document.getElementById("extraSubtitulo"), cont=document.getElementById("extraContenido");\n if(!modal||!cont) return;\n const set=obtenerFavoritos();\n if(tipo==="ultimos"){
+// ============================================================
+// MEJORAS DEL INVENTARIO: estadísticas, favoritos, historial
+// de ingresos y precios. No incluye costos ni ganancias.
+// ============================================================
+const FAVORITOS_KEY = "registroPeluches_favoritos_v1";
+function obtenerFavoritos(){ try { const a=JSON.parse(localStorage.getItem(FAVORITOS_KEY)||"[]"); return new Set(Array.isArray(a)?a:[]); } catch(e){ return new Set(); } }
+function guardarFavoritos(set){ localStorage.setItem(FAVORITOS_KEY, JSON.stringify([...set])); }
+function alternarFavorito(id){ const set=obtenerFavoritos(); set.has(id)?set.delete(id):set.add(id); guardarFavoritos(set); actualizarMenuFavoritos(); if(document.getElementById("panelExtraModal")?.classList.contains("abierto") && document.getElementById("extraTitulo")?.textContent.includes("Favoritos")) abrirPanelExtra("favoritos"); }
+function actualizarMenuFavoritos(){ const el=document.getElementById("menuTotalFavoritos"); if(el) el.textContent=obtenerFavoritos().size; }
+
+function abrirPanelExtra(tipo){
+ const modal=document.getElementById("panelExtraModal"), title=document.getElementById("extraTitulo"), sub=document.getElementById("extraSubtitulo"), cont=document.getElementById("extraContenido");
+ if(!modal||!cont) return;
+ const set=obtenerFavoritos();
+ if(tipo==="estadisticas"){
+   const unidades=peluches.reduce((s,p)=>s+obtenerCantidad(p),0), local=peluches.reduce((s,p)=>s+obtenerCantidadLocal(p),0), bodega=peluches.reduce((s,p)=>s+obtenerCantidadBodega(p),0), bajo=peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length, agot=peluches.filter(p=>estadoPeluche(p)==="Agotado").length;
+   title.textContent="📊 Estadísticas"; sub.textContent="Resumen del inventario, sin ganancias";
+   cont.innerHTML=`<div class="extra-grid"><div class="extra-stat"><strong>${peluches.length}</strong><span>Tipos de peluches</span></div><div class="extra-stat"><strong>${unidades}</strong><span>Unidades</span></div><div class="extra-stat"><strong>${local}</strong><span>En local</span></div><div class="extra-stat"><strong>${bodega}</strong><span>En bodega</span></div><div class="extra-stat"><strong>${bajo}</strong><span>Inventario bajo</span></div><div class="extra-stat"><strong>${agot}</strong><span>Agotados</span></div></div>`;
+ } else if(tipo==="ultimos") {
    title.textContent="🆕 Últimos peluches"; sub.textContent="Los registros agregados más recientemente";
-   const recientes=peluches.map((p,indice)=>({p,indice})).sort((a,b)=>{
-     const da=new Date(a.p.fechaRegistro || (a.p.fechaIngreso ? `${a.p.fechaIngreso}T12:00:00` : 0)).getTime();
-     const db=new Date(b.p.fechaRegistro || (b.p.fechaIngreso ? `${b.p.fechaIngreso}T12:00:00` : 0)).getTime();
-     return (db-da) || (a.indice-b.indice);
-   }).map(x=>x.p).slice(0,30);
-   cont.innerHTML=recientes.length?recientes.map(p=>itemExtra(p,false)).join(""):`<div class="extra-item"><div class="sin-foto">🧸</div><div><strong>Aún no hay peluches registrados.</strong><small>Cuando agregues un peluche aparecerá aquí.</small></div></div>`;
+   const recientes=peluches.slice().sort((a,b)=>new Date(b.fechaRegistro||b.fechaIngreso||0)-new Date(a.fechaRegistro||a.fechaIngreso||0)).slice(0,30);
+   cont.innerHTML=recientes.length?recientes.map(p=>itemExtra(p,false)).join(""):`<div class="extra-item"><div class="sin-foto">🧸</div><div><strong>Aún no hay peluches registrados.</strong><small>Cuando agregues productos aparecerán aquí.</small></div></div>`;
    cont.querySelectorAll("[data-extra-id]").forEach(x=>x.addEventListener("click",()=>abrirDetalle(x.dataset.extraId)));
- } else if(tipo==="estadisticas"){\n   const unidades=peluches.reduce((s,p)=>s+obtenerCantidad(p),0), local=peluches.reduce((s,p)=>s+obtenerCantidadLocal(p),0), bodega=peluches.reduce((s,p)=>s+obtenerCantidadBodega(p),0), bajo=peluches.filter(p=>estadoPeluche(p)==="Poco inventario").length, agot=peluches.filter(p=>estadoPeluche(p)==="Agotado").length;\n   title.textContent="📊 Estadísticas"; sub.textContent="Resumen del inventario, sin ganancias";\n   cont.innerHTML=`<div class="extra-grid"><div class="extra-stat"><strong>${peluches.length}</strong><span>Tipos de peluches</span></div><div class="extra-stat"><strong>${unidades}</strong><span>Unidades</span></div><div class="extra-stat"><strong>${local}</strong><span>En local</span></div><div class="extra-stat"><strong>${bodega}</strong><span>En bodega</span></div><div class="extra-stat"><strong>${bajo}</strong><span>Inventario bajo</span></div><div class="extra-stat"><strong>${agot}</strong><span>Agotados</span></div></div>`;\n } else if(tipo==="favoritos"){\n   title.textContent="⭐ Favoritos"; sub.textContent=`${set.size} peluche(s) marcado(s)`; const fav=peluches.filter(p=>set.has(p.id));\n   cont.innerHTML=fav.length?fav.map(p=>itemExtra(p,true)).join(""):`<div class="extra-item"><div class="sin-foto">⭐</div><div><strong>No tienes favoritos todavía.</strong><small>Marca un peluche como favorito desde su detalle.</small></div></div>`;\n   cont.querySelectorAll("[data-extra-id]").forEach(x=>x.addEventListener("click",()=>abrirDetalle(x.dataset.extraId)));\n } else if(tipo==="ingresos"){\n   title.textContent="📦 Historial de ingresos"; sub.textContent="Lotes y registros de entrada";\n   const grupos=new Map();\n   peluches.forEach(p=>{ const id=p.ingresoId || `fecha-${p.fechaIngreso||"sin-fecha"}-${p.fechaRegistro||p.id}`; if(!grupos.has(id)) grupos.set(id,[]); grupos.get(id).push(p); });\n   const arr=[...grupos.entries()].sort((a,b)=>new Date(b[1][0].fechaRegistro||0)-new Date(a[1][0].fechaRegistro||0));\n   cont.innerHTML=arr.length?arr.slice(0,50).map(([id,ps])=>{const fecha=ps[0].fechaIngreso||"Sin fecha";const uds=ps.reduce((s,p)=>s+obtenerCantidad(p),0);return `<div class="ingreso-resumen" data-ingreso-id="${escaparHTML(id)}"><strong>📅 ${escaparHTML(fecha)} · ${ps.length} tipo(s) · ${uds} unidad(es)</strong><small>${ps.map(p=>escaparHTML(p.nombre||"Sin nombre")).join(" · ")}</small><div class="ingreso-detalle">${ps.map(p=>`<div>🧸 <b>${escaparHTML(p.nombre||"Sin nombre")}</b> · ${obtenerCantidad(p)} unidad(es) · ${escaparHTML(p.etiqueta||"Sin barras")}</div>`).join("")}</div></div>`}).join(""):`<div class="extra-item"><strong>📭 Aún no hay ingresos registrados.</strong></div>`;\n   cont.querySelectorAll(".ingreso-resumen").forEach(x=>x.addEventListener("click",()=>x.classList.toggle("abierto")));\n } else if(tipo==="precios"){\n   title.textContent="🏷️ Historial de precios"; sub.textContent="Cambios de precio guardados por producto";\n   const conCambios=peluches.filter(p=>Array.isArray(p.historialPrecios)&&p.historialPrecios.length>1);\n   cont.innerHTML=conCambios.length?conCambios.sort((a,b)=>new Date(b.historialPrecios.at(-1)?.fecha||0)-new Date(a.historialPrecios.at(-1)?.fecha||0)).map(p=>`<div class="extra-item"><div class="sin-foto">🏷️</div><div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"")} · ${escaparHTML(p.etiqueta||"")}</small><div class="precio-historial">${p.historialPrecios.slice().reverse().map(h=>`<div class="precio-item"><span>Q${escaparHTML(h.precio)}</span><small>${formatearFechaHistorial(h.fecha)}</small></div>`).join("")}</div></div></div>`).join(""):`<div class="extra-item"><strong>🏷️ No hay cambios de precio registrados todavía.</strong><small>Cuando modifiques el precio de un peluche se guardará el anterior.</small></div>`;\n }\n modal.classList.add("abierto");\n}\nfunction itemExtra(p,fav=false){const foto=obtenerFotos(p)[0];return `<div class="extra-item" data-extra-id="${escaparHTML(p.id)}">${foto?`<img src="${escaparHTML(foto)}" alt="">`:`<div class="sin-foto">🧸</div>`}<div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"Sin código")} · ${escaparHTML(p.tamano||p.medida||"Sin medida")}</small></div><button type="button" class="favorito-btn ${fav?"favorito-activo":""}" data-fav-id="${escaparHTML(p.id)}">${fav?"⭐":"☆"}</button></div>`}\nfunction cerrarPanelExtra(){document.getElementById("panelExtraModal")?.classList.remove("abierto");}\ndocument.getElementById("cerrarExtra")?.addEventListener("click",cerrarPanelExtra);\ndocument.getElementById("panelExtraModal")?.addEventListener("click",e=>{if(e.target.id==="panelExtraModal")cerrarPanelExtra(); if(e.target.dataset?.favId){e.stopPropagation();alternarFavorito(e.target.dataset.favId);}});\n\n// Añade favorito al detalle sin alterar las funciones existentes.\nconst _abrirDetalleOriginal=abrirDetalle;\nabrirDetalle=function(id){_abrirDetalleOriginal(id); const p=peluches.find(x=>x.id===id); const cont=document.getElementById("detalleContenido"); if(!p||!cont)return; const b=document.createElement("button"); b.type="button"; b.className="favorito-btn"; b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos"; b.onclick=()=>{alternarFavorito(id); b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos";}; cont.appendChild(b);};\n\n// Extiende las acciones del menú sin romper las anteriores.\ndocument.querySelectorAll("[data-menu-action]").forEach(btn=>btn.addEventListener("click",()=>{const a=btn.dataset.menuAction; if(a==="estadisticas"){cerrarMenuPrincipal();abrirPanelExtra("estadisticas");} else if(a==="favoritos"){cerrarMenuPrincipal();abrirPanelExtra("favoritos");} else if(a==="ingresos"){cerrarMenuPrincipal();abrirPanelExtra("ingresos");} else if(a==="precios"){cerrarMenuPrincipal();abrirPanelExtra("precios");}}));\n\nactualizarMenuFavoritos();\n
+ } else if(tipo==="favoritos"){
+   title.textContent="⭐ Favoritos"; sub.textContent=`${set.size} peluche(s) marcado(s)`; const fav=peluches.filter(p=>set.has(p.id));
+   cont.innerHTML=fav.length?fav.map(p=>itemExtra(p,true)).join(""):`<div class="extra-item"><div class="sin-foto">⭐</div><div><strong>No tienes favoritos todavía.</strong><small>Marca un peluche como favorito desde su detalle.</small></div></div>`;
+   cont.querySelectorAll("[data-extra-id]").forEach(x=>x.addEventListener("click",()=>abrirDetalle(x.dataset.extraId)));
+ } else if(tipo==="ingresos"){
+   title.textContent="📦 Historial de ingresos"; sub.textContent="Lotes y registros de entrada";
+   const grupos=new Map();
+   peluches.forEach(p=>{ const id=p.ingresoId || `fecha-${p.fechaIngreso||"sin-fecha"}-${p.fechaRegistro||p.id}`; if(!grupos.has(id)) grupos.set(id,[]); grupos.get(id).push(p); });
+   const arr=[...grupos.entries()].sort((a,b)=>new Date(b[1][0].fechaRegistro||0)-new Date(a[1][0].fechaRegistro||0));
+   cont.innerHTML=arr.length?arr.slice(0,50).map(([id,ps])=>{const fecha=ps[0].fechaIngreso||"Sin fecha";const uds=ps.reduce((s,p)=>s+obtenerCantidad(p),0);return `<div class="ingreso-resumen" data-ingreso-id="${escaparHTML(id)}"><strong>📅 ${escaparHTML(fecha)} · ${ps.length} tipo(s) · ${uds} unidad(es)</strong><small>${ps.map(p=>escaparHTML(p.nombre||"Sin nombre")).join(" · ")}</small><div class="ingreso-detalle">${ps.map(p=>`<div>🧸 <b>${escaparHTML(p.nombre||"Sin nombre")}</b> · ${obtenerCantidad(p)} unidad(es) · ${escaparHTML(p.etiqueta||"Sin barras")}</div>`).join("")}</div></div>`}).join(""):`<div class="extra-item"><strong>📭 Aún no hay ingresos registrados.</strong></div>`;
+   cont.querySelectorAll(".ingreso-resumen").forEach(x=>x.addEventListener("click",()=>x.classList.toggle("abierto")));
+ } else if(tipo==="precios"){
+   title.textContent="🏷️ Historial de precios"; sub.textContent="Cambios de precio guardados por producto";
+   const conCambios=peluches.filter(p=>Array.isArray(p.historialPrecios)&&p.historialPrecios.length>1);
+   cont.innerHTML=conCambios.length?conCambios.sort((a,b)=>new Date(b.historialPrecios.at(-1)?.fecha||0)-new Date(a.historialPrecios.at(-1)?.fecha||0)).map(p=>`<div class="extra-item"><div class="sin-foto">🏷️</div><div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"")} · ${escaparHTML(p.etiqueta||"")}</small><div class="precio-historial">${p.historialPrecios.slice().reverse().map(h=>`<div class="precio-item"><span>Q${escaparHTML(h.precio)}</span><small>${formatearFechaHistorial(h.fecha)}</small></div>`).join("")}</div></div></div>`).join(""):`<div class="extra-item"><strong>🏷️ No hay cambios de precio registrados todavía.</strong><small>Cuando modifiques el precio de un peluche se guardará el anterior.</small></div>`;
+ }
+ modal.classList.add("abierto");
+}
+function itemExtra(p,fav=false){const foto=obtenerFotos(p)[0];return `<div class="extra-item" data-extra-id="${escaparHTML(p.id)}">${foto?`<img src="${escaparHTML(foto)}" alt="">`:`<div class="sin-foto">🧸</div>`}<div style="flex:1"><strong>${escaparHTML(p.nombre||"Sin nombre")}</strong><small>${escaparHTML(p.codigo||"Sin código")} · ${escaparHTML(p.tamano||p.medida||"Sin medida")}</small></div><button type="button" class="favorito-btn ${fav?"favorito-activo":""}" data-fav-id="${escaparHTML(p.id)}">${fav?"⭐":"☆"}</button></div>`}
+function cerrarPanelExtra(){document.getElementById("panelExtraModal")?.classList.remove("abierto");}
+document.getElementById("cerrarExtra")?.addEventListener("click",cerrarPanelExtra);
+document.getElementById("panelExtraModal")?.addEventListener("click",e=>{if(e.target.id==="panelExtraModal")cerrarPanelExtra(); if(e.target.dataset?.favId){e.stopPropagation();alternarFavorito(e.target.dataset.favId);}});
+
+// Añade favorito al detalle sin alterar las funciones existentes.
+const _abrirDetalleOriginal=abrirDetalle;
+abrirDetalle=function(id){_abrirDetalleOriginal(id); const p=peluches.find(x=>x.id===id); const cont=document.getElementById("detalleContenido"); if(!p||!cont)return; const b=document.createElement("button"); b.type="button"; b.className="favorito-btn"; b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos"; b.onclick=()=>{alternarFavorito(id); b.textContent=obtenerFavoritos().has(id)?"⭐ Quitar de favoritos":"☆ Agregar a favoritos";}; cont.appendChild(b);};
+
+// Extiende las acciones del menú sin romper las anteriores.
+document.querySelectorAll("[data-menu-action]").forEach(btn=>btn.addEventListener("click",()=>{const a=btn.dataset.menuAction; if(a==="estadisticas"){cerrarMenuPrincipal();abrirPanelExtra("estadisticas");} else if(a==="favoritos"){cerrarMenuPrincipal();abrirPanelExtra("favoritos");} else if(a==="ingresos"){cerrarMenuPrincipal();abrirPanelExtra("ingresos");} else if(a==="precios"){cerrarMenuPrincipal();abrirPanelExtra("precios");}}));
+
+actualizarMenuFavoritos();
