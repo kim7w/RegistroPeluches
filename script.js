@@ -3,6 +3,7 @@ import {
     getFirestore,
     collection,
     addDoc,
+    writeBatch,
     getDocs,
     deleteDoc,
     doc,
@@ -198,7 +199,6 @@ function actualizarResumen() {
         ).length
     };
 
-    // Actualiza tanto los indicadores del panel principal como los del menú lateral.
     const indicadores = {
         ...refs,
         menuTotalPeluche: refs.totalPeluche,
@@ -206,10 +206,9 @@ function actualizarResumen() {
         menuTotalBajo: refs.totalBajo,
         menuTotalAgotados: refs.totalAgotados
     };
-
     Object.entries(indicadores).forEach(([id, value]) => {
         const elemento = document.getElementById(id);
-        if (elemento) elemento.textContent = value;
+        if (elemento) elemento.textContent = String(value);
     });
 }
 
@@ -2574,6 +2573,7 @@ Filas incompletas: ${incompletos.length}`);
     try {
         const usadas = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
         const nuevos = [];
+        const loteFirestore = writeBatch(db);
         for (let i = 0; i < filas.length; i++) {
             const base = datosFilas[i];
             let etiquetaFinal = normalizar(base.etiqueta);
@@ -2604,10 +2604,13 @@ Filas incompletas: ${incompletos.length}`);
                 ingresoLote: true, loteIngresoFecha: fecha,
                 estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
             };
-            const nuevo = await addDoc(collection(db, "peluches"), datos);
-            nuevos.push({id: nuevo.id, ...datos});
+            const nuevoRef = doc(collection(db, "peluches"));
+            loteFirestore.set(nuevoRef, datos);
+            nuevos.push({id: nuevoRef.id, ...datos});
             usadas.add(normalizar(base.etiqueta));
         }
+        // Una sola escritura atómica: si falla, no deja solo una parte del ingreso guardada.
+        await loteFirestore.commit();
         peluches = [...nuevos, ...peluches];
         actualizarResumen();
         actualizarInterfazBusqueda();
