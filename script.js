@@ -2453,17 +2453,13 @@ function datosFilaIngreso(fila) {
         cantidadBodega: Math.max(0, Math.floor(numeroSeguro(fila.querySelector(".fila-bodega")?.value))),
         minimo: Math.max(0, numeroSeguro(fila.querySelector(".fila-minimo")?.value || MINIMO_DEFECTO)),
         observaciones: fila.querySelector(".fila-observaciones")?.value.trim() || "",
-        fotos: (() => { try { return JSON.parse(fila.dataset.fotos || "[]"); } catch(e) { return []; } })(),
-        docId: fila.dataset.firestoreId || ""
+        fotos: (() => { try { return JSON.parse(fila.dataset.fotos || "[]"); } catch(e) { return []; } })()
     };
 }
 
 function crearFilaIngreso(datos = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ingreso-fila";
-    // ID estable por fila: evita crear documentos duplicados si se reintenta
-    // un ingreso cuyo guardado llegó a Firebase pero no se confirmó en pantalla.
-    wrap.dataset.firestoreId = datos.docId || `ingreso-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
     wrap.innerHTML = `
         <input class="fila-codigo" placeholder="Código / costo" value="${escaparHTML(datos.codigo || "")}">
         <input class="fila-nombre" placeholder="Nombre del peluche" value="${escaparHTML(datos.nombre || "")}">
@@ -2573,7 +2569,6 @@ Filas incompletas: ${incompletos.length}`);
         return;
     }
     const btn = document.getElementById("btnGuardarIngreso");
-    if (btn?.disabled) return; // evita dos guardados simultáneos por doble toque
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Guardando ingreso..."; }
     try {
         const usadas = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
@@ -2609,22 +2604,14 @@ Filas incompletas: ${incompletos.length}`);
                 ingresoLote: true, loteIngresoFecha: fecha,
                 estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
             };
-            // Reutiliza el ID de documento de la fila en todos los reintentos.
-            // Guardamos primero el borrador con esos IDs para que sobrevivan
-            // a una recarga o a un error de respuesta después del commit.
-            const firestoreId = filas[i].dataset.firestoreId || `ingreso-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
-            filas[i].dataset.firestoreId = firestoreId;
-            const nuevoRef = doc(db, "peluches", firestoreId);
+            const nuevoRef = doc(collection(db, "peluches"));
             loteFirestore.set(nuevoRef, datos);
             nuevos.push({id: nuevoRef.id, ...datos});
             usadas.add(normalizar(base.etiqueta));
         }
-        // Persistir los IDs antes de escribir: el reintento usará los mismos documentos.
-        guardarBorradorIngreso();
         // Una sola escritura atómica: si falla, no deja solo una parte del ingreso guardada.
         await loteFirestore.commit();
-        const idsGuardados = new Set(nuevos.map(p => p.id));
-        peluches = [...nuevos, ...peluches.filter(p => !idsGuardados.has(p.id))];
+        peluches = [...nuevos, ...peluches];
         actualizarResumen();
         actualizarInterfazBusqueda();
         borrarBorradorIngreso();
