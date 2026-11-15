@@ -22,6 +22,27 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// El menú se conecta desde el inicio del módulo para que un error posterior
+// en otra función no impida que el botón hamburguesa responda.
+document.addEventListener("click", evento => {
+    const botonMenu = evento.target.closest("#btnMenu");
+    if (botonMenu) {
+        evento.preventDefault();
+        evento.stopPropagation();
+        const menu = document.getElementById("menuLateral");
+        if (menu?.classList.contains("abierto")) {
+            cerrarMenuPrincipal();
+        } else {
+            abrirMenuPrincipal();
+        }
+        return;
+    }
+
+    if (evento.target.closest("#cerrarMenu") || evento.target.id === "menuOverlay") {
+        cerrarMenuPrincipal();
+    }
+}, true);
+
 const CLOUDINARY_UPLOAD = "https://api.cloudinary.com/v1_1/vspx5rke/image/upload";
 const CLOUDINARY_PRESET = "peluches";
 const MINIMO_DEFECTO = 2;
@@ -2867,14 +2888,7 @@ actualizarResumen = function() {
     if (typeof actualizarMenuFavoritos === "function") actualizarMenuFavoritos();
 };
 
-// Menú hamburguesa.
-document.getElementById("btnMenu")?.addEventListener("click", e => {
-    e.stopPropagation();
-    const abierto = document.getElementById("menuLateral")?.classList.contains("abierto");
-    abierto ? cerrarMenuPrincipal() : abrirMenuPrincipal();
-});
-document.getElementById("cerrarMenu")?.addEventListener("click", cerrarMenuPrincipal);
-document.getElementById("menuOverlay")?.addEventListener("click", cerrarMenuPrincipal);
+// El menú ya quedó conectado al inicio del módulo.
 
 // Acciones del menú lateral.
 document.querySelectorAll("[data-menu-action]").forEach(boton => {
