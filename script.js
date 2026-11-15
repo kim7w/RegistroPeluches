@@ -66,6 +66,7 @@ let editando = null;
 let filtroActivo = "todos";
 let ordenActivo = "reciente";
 const seleccionados = new Set();
+let modoSeleccionActivo = false;
 let detalleId = null;
 
 let visorFotos = [];
@@ -332,7 +333,13 @@ function actualizarSeleccionUI() {
     const toolbar = document.getElementById("seleccionToolbar");
     const count = document.getElementById("seleccionCount");
     if (count) count.textContent = seleccionados.size;
-    if (toolbar) toolbar.hidden = seleccionados.size === 0;
+    if (toolbar) toolbar.hidden = !modoSeleccionActivo;
+    document.body.classList.toggle("modo-seleccion-activo", modoSeleccionActivo);
+    const botonModo = document.getElementById("btnModoSeleccion");
+    if (botonModo) {
+        botonModo.setAttribute("aria-pressed", String(modoSeleccionActivo));
+        botonModo.textContent = modoSeleccionActivo ? "✖️ Salir del modo selección" : "☑️ Seleccionar peluches para etiquetas";
+    }
 
     document.querySelectorAll(".tarjeta[data-id]").forEach(tarjeta => {
         tarjeta.classList.toggle("seleccionada", seleccionados.has(tarjeta.dataset.id));
@@ -341,7 +348,21 @@ function actualizarSeleccionUI() {
     });
 }
 
+function alternarModoSeleccion() {
+    modoSeleccionActivo = !modoSeleccionActivo;
+    if (!modoSeleccionActivo) seleccionados.clear();
+    actualizarSeleccionUI();
+}
+
+document.getElementById("btnModoSeleccion")?.addEventListener("click", alternarModoSeleccion);
+document.getElementById("btnSalirSeleccion")?.addEventListener("click", () => {
+    modoSeleccionActivo = false;
+    seleccionados.clear();
+    actualizarSeleccionUI();
+});
+
 function alternarSeleccion(id, evento) {
+    if (!modoSeleccionActivo) return;
     evento?.stopPropagation();
     if (seleccionados.has(id)) seleccionados.delete(id);
     else seleccionados.add(id);
@@ -971,38 +992,22 @@ async function guardarFormulario(e) {
             if (campoEtiqueta) campoEtiqueta.value = etiquetaFinal;
         }
 
-        let fotos = [];
-
-        if (foto?.files?.length) {
-            fotos = (
-                await Promise.all(
-                    [...foto.files].map(subirImagenCloudinary)
-                )
-            ).filter(Boolean);
-
-        } else if (editando) {
-            const existente = peluches.find(
-                p => p.id === editando
-            );
-
-            fotos = existente
-                ? obtenerFotos(existente)
-                : [];
+        // El código interno puede repetirse; la etiqueta/código de barras no.
+        // Comprobamos antes de subir fotos para evitar archivos huérfanos.
+        const existentePorEtiqueta = peluches.find(
+            p => normalizar(p.etiqueta) === normalizar(etiquetaFinal) && p.id !== editando
+        );
+        if (existentePorEtiqueta) {
+            alert("Ese código de barras / etiqueta ya está registrado. Busca el producto existente o usa otro código.");
+            return;
         }
 
-        // El código interno / código del producto puede repetirse.
-        // La etiqueta / código de barras es la que debe ser única.
-        const existentePorEtiqueta = peluches.find(
-            p =>
-                normalizar(p.etiqueta) === normalizar(etiquetaFinal) &&
-                p.id !== editando
-        );
-
-        if (existentePorEtiqueta) {
-            alert(
-                "Ese código de barras / etiqueta ya está registrado. Busca el producto existente o usa otro código."
-            );
-            return;
+        let fotos = [];
+        if (foto?.files?.length) {
+            fotos = (await Promise.all([...foto.files].map(subirImagenCloudinary))).filter(Boolean);
+        } else if (editando) {
+            const existente = peluches.find(p => p.id === editando);
+            fotos = existente ? obtenerFotos(existente) : [];
         }
 
         const productoExistente = editando
@@ -3059,8 +3064,11 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
     const preview = document.getElementById("fotoBusquedaPreview");
     const resultados = document.getElementById("fotoBusquedaResultados");
     if (!boton || !modal || !input || !estado || !preview || !resultados) return;
+    let urlFotoTemporal = "";
 
     const abrir = () => {
+        if (urlFotoTemporal) URL.revokeObjectURL(urlFotoTemporal);
+        urlFotoTemporal = "";
         modal.classList.add("abierto");
         input.value = "";
         preview.hidden = true;
@@ -3071,14 +3079,20 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
     const cerrarModal = () => {
         modal.classList.remove("abierto");
         input.value = "";
+        if (urlFotoTemporal) URL.revokeObjectURL(urlFotoTemporal);
+        urlFotoTemporal = "";
     };
     boton.addEventListener("click", abrir);
     cerrar?.addEventListener("click", cerrarModal);
     modal.addEventListener("click", e => { if (e.target === modal) cerrarModal(); });
 
+    const cacheVectores = new Map();
     function vectorImagen(origen) {
-        return new Promise((resolve, reject) => {
+        const clave = typeof origen === "string" ? origen : null;
+        if (clave && cacheVectores.has(clave)) return cacheVectores.get(clave);
+        const promesa = new Promise((resolve, reject) => {
             const img = new Image();
+            let urlTemporal = "";
             if (typeof origen === "string") img.crossOrigin = "anonymous";
             img.onload = () => {
                 try {
@@ -3095,11 +3109,22 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
                     }
                     resolve(v);
                 } catch (err) { reject(err); }
+                finally { if (urlTemporal) URL.revokeObjectURL(urlTemporal); }
             };
-            img.onerror = () => reject(new Error("No se pudo leer la imagen"));
-            if (origen instanceof Blob) img.src = URL.createObjectURL(origen);
-            else img.src = origen;
+            img.onerror = () => {
+                if (urlTemporal) URL.revokeObjectURL(urlTemporal);
+                reject(new Error("No se pudo leer la imagen"));
+            };
+            if (origen instanceof Blob) {
+                urlTemporal = URL.createObjectURL(origen);
+                img.src = urlTemporal;
+            } else img.src = origen;
         });
+        if (clave) {
+            cacheVectores.set(clave, promesa);
+            if (cacheVectores.size > 700) cacheVectores.delete(cacheVectores.keys().next().value);
+        }
+        return promesa;
     }
 
     function distancia(a, b) {
@@ -3117,23 +3142,28 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
         preview.hidden = false;
         preview.style.margin = "12px 0";
         preview.style.textAlign = "center";
-        const urlLocal = URL.createObjectURL(archivo);
-        preview.innerHTML = `<img src="${urlLocal}" alt="Foto seleccionada" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:12px">`;
+        if (urlFotoTemporal) URL.revokeObjectURL(urlFotoTemporal);
+        urlFotoTemporal = URL.createObjectURL(archivo);
+        preview.innerHTML = `<img src="${urlFotoTemporal}" alt="Foto seleccionada" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:12px">`;
         try {
             const referencia = await vectorImagen(archivo);
             const candidatos = [];
             let noLeidas = 0;
-            for (const p of peluches) {
-                const fotos = obtenerFotos(p);
-                if (!fotos.length) continue;
-                let mejor = Infinity;
-                for (const url of fotos.slice(0, 2)) {
+            const conFoto = peluches.map(p => ({ p, url: obtenerFotos(p)[0] })).filter(x => x.url);
+            // Máximo 6 lecturas simultáneas: evita bloquear el teléfono al comparar inventarios grandes.
+            for (let i = 0; i < conFoto.length; i += 6) {
+                const lote = conFoto.slice(i, i + 6);
+                const comparaciones = await Promise.all(lote.map(async ({p, url}) => {
                     try {
                         const v = await vectorImagen(url);
-                        mejor = Math.min(mejor, distancia(referencia, v));
-                    } catch (e) { noLeidas++; }
-                }
-                if (Number.isFinite(mejor)) candidatos.push({ p, distancia: mejor });
+                        return { p, distancia: distancia(referencia, v) };
+                    } catch (_) {
+                        noLeidas++;
+                        return null;
+                    }
+                }));
+                comparaciones.filter(Boolean).forEach(x => candidatos.push(x));
+                estado.textContent = `Comparando fotografías: ${Math.min(i + lote.length, conFoto.length)} de ${conFoto.length}...`;
             }
             candidatos.sort((a, b) => a.distancia - b.distancia);
             const mejores = candidatos.slice(0, 12);
