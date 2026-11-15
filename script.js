@@ -1947,6 +1947,24 @@ async function abrirScanner() {
             () => {}
         );
 
+        // Html5Qrcode inserta el video dinámicamente; fijamos sus dimensiones
+        // desde JS para que la vista previa no quede colapsada por estilos externos.
+        const reader = document.getElementById("reader");
+        if (reader) {
+            reader.style.width = "100%";
+            reader.style.minHeight = "220px";
+            reader.style.overflow = "hidden";
+            const video = reader.querySelector("video");
+            if (video) {
+                video.style.display = "block";
+                video.style.width = "100%";
+                video.style.maxWidth = "100%";
+                video.style.height = "auto";
+                video.style.maxHeight = "360px";
+                video.style.objectFit = "cover";
+                video.setAttribute("playsinline", "true");
+            }
+        }
         if (estado) {
             estado.textContent =
                 "Cámara activa. Apunta al código. También leeré códigos impresos como >ZDB-P4107.";
@@ -2586,10 +2604,15 @@ async function guardarNuevoIngreso() {
                 estado: cantidad <= 0 ? "Agotado" : (cantidad <= base.minimo ? "Poco inventario" : "Disponible")
             };
             const nuevo = await addDoc(collection(db, "peluches"), datos);
-            nuevos.push({id: nuevo.id, ...datos});
+            const pelucheGuardado = { id: nuevo.id, ...datos };
+            // Actualizar el estado local inmediatamente después de cada guardado.
+            // Si el lote falla a mitad, el siguiente intento detectará estos códigos
+            // y no volverá a crear los registros que ya llegaron a Firestore.
+            nuevos.push(pelucheGuardado);
+            peluches.unshift(pelucheGuardado);
             usadas.add(normalizar(base.etiqueta));
+            actualizarResumen();
         }
-        peluches = [...nuevos, ...peluches];
         actualizarResumen();
         actualizarInterfazBusqueda();
         borrarBorradorIngreso();
@@ -2598,7 +2621,10 @@ async function guardarNuevoIngreso() {
         alert(`✅ Ingreso guardado correctamente.\n\n🧸 Productos registrados: ${nuevos.length}\n📦 Unidades: ${nuevos.reduce((s,p)=>s+obtenerCantidad(p),0)}\n📅 Fecha: ${fecha}`);
     } catch (error) {
         console.error("Error guardando ingreso:", error);
-        alert(`No se pudo completar el ingreso.\n\n${error.message || "Revisa tu conexión e inténtalo nuevamente."}\n\nEl borrador se conserva para que no pierdas el avance.`);
+        // Reflejar los registros que sí se guardaron antes del fallo.
+        actualizarResumen();
+        actualizarInterfazBusqueda();
+        alert(`No se pudo completar el ingreso.\n\n${error.message || "Revisa tu conexión e inténtalo nuevamente."}\n\nLos productos que sí se guardaron ya están registrados; al reintentar, sus etiquetas se detectarán para evitar duplicarlos. El borrador se conserva para que no pierdas el avance.`);
         guardarBorradorIngreso();
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "💾 Guardar todo el ingreso"; }
@@ -2827,6 +2853,18 @@ const _actualizarResumenOriginal = actualizarResumen;
 actualizarResumen = function() {
     _actualizarResumenOriginal();
     actualizarUltimosPeluches();
+    const unidades = peluches.reduce((suma, p) => suma + obtenerCantidad(p), 0);
+    const menu = {
+        menuTotalPeluche: peluches.length,
+        menuTotalUnidades: unidades,
+        menuTotalBajo: peluches.filter(p => estadoPeluche(p) === "Poco inventario").length,
+        menuTotalAgotados: peluches.filter(p => estadoPeluche(p) === "Agotado").length
+    };
+    Object.entries(menu).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    });
+    if (typeof actualizarMenuFavoritos === "function") actualizarMenuFavoritos();
 };
 
 // Menú hamburguesa.
@@ -2993,3 +3031,123 @@ window.addEventListener("beforeunload",()=>{try{guardarBorradorIngreso?.();}catc
 
 buscar?.addEventListener("change",()=>guardarBusquedaReciente(buscar.value));
 buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaReciente(buscar.value);});
+
+
+// ============================================================
+// BÚSQUEDA LOCAL POR FOTO (similitud visual aproximada)
+// ============================================================
+(function iniciarBusquedaPorFoto() {
+    const boton = document.getElementById("btnBuscarFoto");
+    const modal = document.getElementById("fotoBusquedaModal");
+    const cerrar = document.getElementById("cerrarFotoBusqueda");
+    const input = document.getElementById("fotoBusquedaInput");
+    const estado = document.getElementById("fotoBusquedaEstado");
+    const preview = document.getElementById("fotoBusquedaPreview");
+    const resultados = document.getElementById("fotoBusquedaResultados");
+    if (!boton || !modal || !input || !estado || !preview || !resultados) return;
+
+    const abrir = () => {
+        modal.classList.add("abierto");
+        input.value = "";
+        preview.hidden = true;
+        preview.innerHTML = "";
+        resultados.innerHTML = "";
+        estado.textContent = "Selecciona una foto para comenzar.";
+    };
+    const cerrarModal = () => {
+        modal.classList.remove("abierto");
+        input.value = "";
+    };
+    boton.addEventListener("click", abrir);
+    cerrar?.addEventListener("click", cerrarModal);
+    modal.addEventListener("click", e => { if (e.target === modal) cerrarModal(); });
+
+    function vectorImagen(origen) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            if (typeof origen === "string") img.crossOrigin = "anonymous";
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = 12;
+                    canvas.height = 12;
+                    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                    ctx.drawImage(img, 0, 0, 12, 12);
+                    const px = ctx.getImageData(0, 0, 12, 12).data;
+                    const v = [];
+                    for (let i = 0; i < px.length; i += 4) {
+                        // Color y luminosidad reducidos a una escala comparable.
+                        v.push(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+                    }
+                    resolve(v);
+                } catch (err) { reject(err); }
+            };
+            img.onerror = () => reject(new Error("No se pudo leer la imagen"));
+            if (origen instanceof Blob) img.src = URL.createObjectURL(origen);
+            else img.src = origen;
+        });
+    }
+
+    function distancia(a, b) {
+        if (!a || !b || a.length !== b.length) return Infinity;
+        let suma = 0;
+        for (let i = 0; i < a.length; i++) suma += Math.abs(a[i] - b[i]);
+        return suma / a.length;
+    }
+
+    input.addEventListener("change", async () => {
+        const archivo = input.files?.[0];
+        if (!archivo) return;
+        resultados.innerHTML = "";
+        estado.textContent = "Analizando la foto y comparándola con las imágenes del inventario...";
+        preview.hidden = false;
+        preview.style.margin = "12px 0";
+        preview.style.textAlign = "center";
+        const urlLocal = URL.createObjectURL(archivo);
+        preview.innerHTML = `<img src="${urlLocal}" alt="Foto seleccionada" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:12px">`;
+        try {
+            const referencia = await vectorImagen(archivo);
+            const candidatos = [];
+            let noLeidas = 0;
+            for (const p of peluches) {
+                const fotos = obtenerFotos(p);
+                if (!fotos.length) continue;
+                let mejor = Infinity;
+                for (const url of fotos.slice(0, 2)) {
+                    try {
+                        const v = await vectorImagen(url);
+                        mejor = Math.min(mejor, distancia(referencia, v));
+                    } catch (e) { noLeidas++; }
+                }
+                if (Number.isFinite(mejor)) candidatos.push({ p, distancia: mejor });
+            }
+            candidatos.sort((a, b) => a.distancia - b.distancia);
+            const mejores = candidatos.slice(0, 12);
+            if (!mejores.length) {
+                estado.textContent = noLeidas
+                    ? "No fue posible comparar las fotos guardadas. Puede que el servidor de imágenes no permita la lectura desde esta página."
+                    : "No hay peluches con fotografías para comparar.";
+                return;
+            }
+            estado.textContent = `Se encontraron ${candidatos.length} posibles coincidencias. Los primeros son los más parecidos por color y apariencia general.`;
+            resultados.style.display = "grid";
+            resultados.style.gap = "10px";
+            resultados.innerHTML = mejores.map(({p, distancia: d}) => {
+                const f = obtenerFotos(p)[0];
+                const similitud = Math.max(0, Math.min(99, Math.round((1 - d) * 100)));
+                return `<button type="button" class="foto-busqueda-resultado" data-foto-id="${escaparHTML(p.id)}" style="display:flex;align-items:center;gap:12px;width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-align:left;cursor:pointer;color:inherit">
+                    ${f ? `<img src="${escaparHTML(f)}" alt="" loading="lazy" style="width:76px;height:76px;flex:0 0 76px;object-fit:cover;border-radius:9px">` : `<span style="width:76px;height:76px;display:grid;place-items:center">🧸</span>`}
+                    <span style="display:grid;gap:4px;min-width:0"><strong>${escaparHTML(p.nombre || "Sin nombre")}</strong><small>${escaparHTML(p.codigo || "Sin código")} · ${escaparHTML(p.tamano || p.medida || "Sin medida")}</small><small>Similitud de color/apariencia: ${similitud}%</small></span>
+                </button>`;
+            }).join("");
+            resultados.querySelectorAll("[data-foto-id]").forEach(el => el.addEventListener("click", () => {
+                const id = el.dataset.fotoId;
+                cerrarModal();
+                abrirDetalle(id);
+            }));
+        } catch (error) {
+            console.error("Error en búsqueda por foto:", error);
+            estado.textContent = "No se pudo analizar esa imagen. Prueba con otra fotografía.";
+        }
+    });
+})();
