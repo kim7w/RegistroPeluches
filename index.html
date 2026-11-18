@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20261120-renovacion01">
+    <link rel="stylesheet" href="style.css?v=20261118-original02">
 </head>
 <body>
 <div class="contenedor" id="topPagina">
@@ -45,7 +45,6 @@
         <div class="menu-separador"></div>
         <button type="button" data-menu-action="exportar">💾 <span>Copia de seguridad</span></button>
         <button type="button" data-menu-action="importar">📥 <span>Importar respaldo</span></button>
-        <button type="button" data-menu-action="duplicados">🧹 <span>Revisar duplicados exactos</span></button>
     </nav>
     <div class="menu-pie">Versión de inventario · Peluches</div>
 </aside>
@@ -60,23 +59,23 @@
     </header>
 
     <section class="resumen" id="seccionResumen" aria-label="Resumen del inventario">
-        <div class="estadistica resumen-acceso" data-resumen-filtro="todos" role="button" tabindex="0" aria-label="Ver todos los peluches">
+        <div class="estadistica">
             <span class="estadistica-icono">🧸</span>
             <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
         </div>
-        <div class="estadistica resumen-acceso" data-resumen-filtro="todos" role="button" tabindex="0" aria-label="Ver inventario completo">
+        <div class="estadistica">
             <span class="estadistica-icono">📦</span>
             <div><strong id="totalUnidades">0</strong><small>Unidades</small></div>
         </div>
-        <div class="estadistica resumen-acceso" data-resumen-filtro="disponible" role="button" tabindex="0" aria-label="Ver peluches disponibles">
+        <div class="estadistica">
             <span class="estadistica-icono">✨</span>
             <div><strong id="totalDisponibles">0</strong><small>Disponibles</small></div>
         </div>
-        <div class="estadistica resumen-acceso" data-resumen-filtro="agotado" role="button" tabindex="0" aria-label="Ver peluches agotados">
+        <div class="estadistica">
             <span class="estadistica-icono">🏷️</span>
             <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
         </div>
-        <div class="estadistica alerta resumen-acceso" id="tarjetaBajo" data-resumen-filtro="bajo" role="button" tabindex="0" aria-label="Ver peluches con inventario bajo">
+        <div class="estadistica alerta" id="tarjetaBajo">
             <span class="estadistica-icono">⚠️</span>
             <div><strong id="totalBajo">0</strong><small>Inventario bajo</small></div>
         </div>
@@ -179,7 +178,7 @@
         </form>
     </section>
 
-    <div class="seleccion-entrada" hidden aria-hidden="true">
+    <div class="seleccion-entrada">
         <button type="button" id="btnModoSeleccion" aria-pressed="false">☑️ Seleccionar peluches para etiquetas</button>
     </div>
     <section class="seleccion-toolbar" id="seleccionToolbar" hidden>
@@ -270,7 +269,6 @@
             <button type="button" id="detalleSalida">➖ Salida</button>
             <button type="button" id="detalleEditar">✏️ Editar</button>
             <button type="button" id="detalleHistorial">🕘 Historial</button>
-            <button type="button" id="detalleEliminar" class="detalle-eliminar">🗑️ Eliminar</button>
         </div>
     </div>
 </div>
@@ -338,6 +336,6 @@
 
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script type="module" src="script.js?v=20261120-renovacion01"></script>
+<script type="module" src="script.js?v=20261118-original02"></script>
 </body>
 </html>
