@@ -22,27 +22,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// El menú se conecta desde el inicio del módulo para que un error posterior
-// en otra función no impida que el botón hamburguesa responda.
-document.addEventListener("click", evento => {
-    const botonMenu = evento.target.closest("#btnMenu");
-    if (botonMenu) {
-        evento.preventDefault();
-        evento.stopPropagation();
-        const menu = document.getElementById("menuLateral");
-        if (menu?.classList.contains("abierto")) {
-            cerrarMenuPrincipal();
-        } else {
-            abrirMenuPrincipal();
-        }
-        return;
-    }
-
-    if (evento.target.closest("#cerrarMenu") || evento.target.id === "menuOverlay") {
-        cerrarMenuPrincipal();
-    }
-}, true);
-
 const CLOUDINARY_UPLOAD = "https://api.cloudinary.com/v1_1/vspx5rke/image/upload";
 const CLOUDINARY_PRESET = "peluches";
 const MINIMO_DEFECTO = 2;
@@ -66,7 +45,6 @@ let editando = null;
 let filtroActivo = "todos";
 let ordenActivo = "reciente";
 const seleccionados = new Set();
-let modoSeleccionActivo = false;
 let detalleId = null;
 
 let visorFotos = [];
@@ -329,17 +307,27 @@ function actualizarInterfazBusqueda() {
 }
 
 
+function alternarModoSeleccion(forzar) {
+    const activo = typeof forzar === "boolean"
+        ? forzar
+        : !document.body.classList.contains("modo-seleccion-activo");
+    document.body.classList.toggle("modo-seleccion-activo", activo);
+    const boton = document.getElementById("btnModoSeleccion");
+    if (boton) {
+        boton.setAttribute("aria-pressed", String(activo));
+        boton.textContent = activo
+            ? "✓ Terminar selección de etiquetas"
+            : "☑️ Seleccionar peluches para etiquetas";
+    }
+    if (!activo) quitarSeleccion();
+    actualizarSeleccionUI();
+}
+
 function actualizarSeleccionUI() {
     const toolbar = document.getElementById("seleccionToolbar");
     const count = document.getElementById("seleccionCount");
     if (count) count.textContent = seleccionados.size;
-    if (toolbar) toolbar.hidden = !modoSeleccionActivo;
-    document.body.classList.toggle("modo-seleccion-activo", modoSeleccionActivo);
-    const botonModo = document.getElementById("btnModoSeleccion");
-    if (botonModo) {
-        botonModo.setAttribute("aria-pressed", String(modoSeleccionActivo));
-        botonModo.textContent = modoSeleccionActivo ? "✖️ Salir del modo selección" : "☑️ Seleccionar peluches para etiquetas";
-    }
+    if (toolbar) toolbar.hidden = seleccionados.size === 0 && !document.body.classList.contains("modo-seleccion-activo");
 
     document.querySelectorAll(".tarjeta[data-id]").forEach(tarjeta => {
         tarjeta.classList.toggle("seleccionada", seleccionados.has(tarjeta.dataset.id));
@@ -348,21 +336,7 @@ function actualizarSeleccionUI() {
     });
 }
 
-function alternarModoSeleccion() {
-    modoSeleccionActivo = !modoSeleccionActivo;
-    if (!modoSeleccionActivo) seleccionados.clear();
-    actualizarSeleccionUI();
-}
-
-document.getElementById("btnModoSeleccion")?.addEventListener("click", alternarModoSeleccion);
-document.getElementById("btnSalirSeleccion")?.addEventListener("click", () => {
-    modoSeleccionActivo = false;
-    seleccionados.clear();
-    actualizarSeleccionUI();
-});
-
 function alternarSeleccion(id, evento) {
-    if (!modoSeleccionActivo) return;
     evento?.stopPropagation();
     if (seleccionados.has(id)) seleccionados.delete(id);
     else seleccionados.add(id);
@@ -992,22 +966,36 @@ async function guardarFormulario(e) {
             if (campoEtiqueta) campoEtiqueta.value = etiquetaFinal;
         }
 
-        // El código interno puede repetirse; la etiqueta/código de barras no.
-        // Comprobamos antes de subir fotos para evitar archivos huérfanos.
-        const existentePorEtiqueta = peluches.find(
-            p => normalizar(p.etiqueta) === normalizar(etiquetaFinal) && p.id !== editando
-        );
-        if (existentePorEtiqueta) {
-            alert("Ese código de barras / etiqueta ya está registrado. Busca el producto existente o usa otro código.");
+        // Verificar la etiqueta antes de subir cualquier fotografía.
+        // Se consulta Firestore para detectar también registros agregados desde otra sesión.
+        const etiquetaNormalizada = normalizar(etiquetaFinal);
+        const inventarioActual = await getDocs(collection(db, "peluches"));
+        const duplicadoEtiqueta = inventarioActual.docs.find(d => {
+            const dato = d.data();
+            return normalizar(dato.etiqueta || "") === etiquetaNormalizada && d.id !== editando;
+        });
+        if (duplicadoEtiqueta) {
+            alert("Ese código de barras / etiqueta ya está registrado. No se subió ninguna fotografía. Busca el producto existente o usa otro código.");
             return;
         }
 
         let fotos = [];
+
         if (foto?.files?.length) {
-            fotos = (await Promise.all([...foto.files].map(subirImagenCloudinary))).filter(Boolean);
+            fotos = (
+                await Promise.all(
+                    [...foto.files].map(subirImagenCloudinary)
+                )
+            ).filter(Boolean);
+
         } else if (editando) {
-            const existente = peluches.find(p => p.id === editando);
-            fotos = existente ? obtenerFotos(existente) : [];
+            const existente = peluches.find(
+                p => p.id === editando
+            );
+
+            fotos = existente
+                ? obtenerFotos(existente)
+                : [];
         }
 
         const productoExistente = editando
@@ -1924,8 +1912,12 @@ async function iniciarOCR() {
 }
 
 let scannerDestinoIngresoFila = null;
+let scannerModoIngresoMultiple = false;
+let ultimoCodigoEscaneado = "";
+let ultimoCodigoEscaneadoEn = 0;
 
 function abrirScannerParaIngresoFila(fila) {
+    scannerModoIngresoMultiple = true;
     scannerDestinoIngresoFila = fila;
     const estado = document.getElementById("scannerEstado");
     if (estado) estado.textContent = "Preparando cámara para llenar el código de barras de esta fila...";
@@ -2040,6 +2032,8 @@ async function cerrarScanner() {
     scanner = null;
     scannerActivo = false;
     scannerDestinoIngresoFila = null;
+    scannerModoIngresoMultiple = false;
+    ultimoCodigoEscaneado = "";
 
     modal?.classList.remove("abierto");
 
@@ -2056,6 +2050,19 @@ function procesarCodigoEscaneado(codigo) {
 
     if (!valor) return;
 
+    const ahora = Date.now();
+    if (normalizar(valor) === normalizar(ultimoCodigoEscaneado) && ahora - ultimoCodigoEscaneadoEn < 2200) return;
+    ultimoCodigoEscaneado = valor;
+    ultimoCodigoEscaneadoEn = ahora;
+
+    // En ingreso múltiple la cámara permanece abierta entre lecturas.
+    // Después de completar una fila, espera a que se elija la siguiente.
+    if (scannerModoIngresoMultiple && !scannerDestinoIngresoFila) {
+        const estado = document.getElementById("scannerEstado");
+        if (estado) estado.textContent = "Código leído. Pulsa Escanear en la siguiente fila para asignarle otro código, o cierra la cámara para terminar.";
+        return;
+    }
+
     // Si el lector fue abierto desde una fila de "Nuevo ingreso (varios)",
     // colocamos el código directamente en esa fila en lugar de buscar un producto.
     if (scannerDestinoIngresoFila) {
@@ -2067,7 +2074,8 @@ function procesarCodigoEscaneado(codigo) {
             input.focus();
         }
         scannerDestinoIngresoFila = null;
-        cerrarScanner();
+        const estado = document.getElementById("scannerEstado");
+        if (estado) estado.textContent = "✓ Código agregado. Puedes pulsar Escanear en otra fila sin cerrar la cámara.";
         actualizarEstadoBorrador("💾 Código escaneado y borrador guardado");
         programarGuardadoBorrador();
         return;
@@ -2425,6 +2433,8 @@ document.getElementById("ordenar")?.addEventListener("change", e => {
     actualizarInterfazBusqueda();
 });
 
+document.getElementById("btnModoSeleccion")?.addEventListener("click", () => alternarModoSeleccion());
+document.getElementById("btnSalirSeleccion")?.addEventListener("click", () => alternarModoSeleccion(false));
 document.getElementById("btnSeleccionarTodos")?.addEventListener("click", seleccionarVisibles);
 document.getElementById("btnQuitarSeleccion")?.addEventListener("click", quitarSeleccion);
 document.getElementById("btnImprimirSeleccion")?.addEventListener("click", imprimirEtiquetas);
@@ -2597,7 +2607,11 @@ async function guardarNuevoIngreso() {
     const btn = document.getElementById("btnGuardarIngreso");
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Guardando ingreso..."; }
     try {
-        const usadas = new Set(peluches.map(p => normalizar(p.etiqueta || "")).filter(Boolean));
+        // Leer el inventario más reciente antes de subir fotos o guardar el lote.
+        const inventarioActual = await getDocs(collection(db, "peluches"));
+        const usadas = new Set(inventarioActual.docs
+            .map(d => normalizar(d.data().etiqueta || ""))
+            .filter(Boolean));
         const nuevos = [];
         for (let i = 0; i < filas.length; i++) {
             const base = datosFilas[i];
@@ -2668,6 +2682,8 @@ document.getElementById("btnDescartarBorrador")?.addEventListener("click", () =>
 // Funciones utilizadas directamente desde el HTML.
 window.editarPeluche =
     editarPeluche;
+window.alternarSeleccion = alternarSeleccion;
+window.alternarModoSeleccion = alternarModoSeleccion;
 
 window.eliminarPeluche =
     eliminarPeluche;
@@ -2893,7 +2909,14 @@ actualizarResumen = function() {
     if (typeof actualizarMenuFavoritos === "function") actualizarMenuFavoritos();
 };
 
-// El menú ya quedó conectado al inicio del módulo.
+// Menú hamburguesa.
+document.getElementById("btnMenu")?.addEventListener("click", e => {
+    e.stopPropagation();
+    const abierto = document.getElementById("menuLateral")?.classList.contains("abierto");
+    abierto ? cerrarMenuPrincipal() : abrirMenuPrincipal();
+});
+document.getElementById("cerrarMenu")?.addEventListener("click", cerrarMenuPrincipal);
+document.getElementById("menuOverlay")?.addEventListener("click", cerrarMenuPrincipal);
 
 // Acciones del menú lateral.
 document.querySelectorAll("[data-menu-action]").forEach(boton => {
@@ -3064,11 +3087,8 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
     const preview = document.getElementById("fotoBusquedaPreview");
     const resultados = document.getElementById("fotoBusquedaResultados");
     if (!boton || !modal || !input || !estado || !preview || !resultados) return;
-    let urlFotoTemporal = "";
 
     const abrir = () => {
-        if (urlFotoTemporal) URL.revokeObjectURL(urlFotoTemporal);
-        urlFotoTemporal = "";
         modal.classList.add("abierto");
         input.value = "";
         preview.hidden = true;
@@ -3079,33 +3099,49 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
     const cerrarModal = () => {
         modal.classList.remove("abierto");
         input.value = "";
-        if (urlFotoTemporal) URL.revokeObjectURL(urlFotoTemporal);
-        urlFotoTemporal = "";
     };
     boton.addEventListener("click", abrir);
     cerrar?.addEventListener("click", cerrarModal);
     modal.addEventListener("click", e => { if (e.target === modal) cerrarModal(); });
 
     const cacheVectores = new Map();
+
     function vectorImagen(origen) {
-        const clave = typeof origen === "string" ? origen : null;
-        if (clave && cacheVectores.has(clave)) return cacheVectores.get(clave);
-        const promesa = new Promise((resolve, reject) => {
+        const clave = typeof origen === "string" ? origen : origen;
+        if (typeof clave === "string" && cacheVectores.has(clave)) return cacheVectores.get(clave);
+        const tarea = new Promise((resolve, reject) => {
             const img = new Image();
-            let urlTemporal = "";
             if (typeof origen === "string") img.crossOrigin = "anonymous";
+            let urlTemporal = "";
             img.onload = () => {
                 try {
                     const canvas = document.createElement("canvas");
-                    canvas.width = 12;
-                    canvas.height = 12;
+                    canvas.width = 16;
+                    canvas.height = 16;
                     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                    ctx.drawImage(img, 0, 0, 12, 12);
-                    const px = ctx.getImageData(0, 0, 12, 12).data;
+                    if (!ctx) throw new Error("No se pudo preparar la imagen");
+                    // Recorte centrado tipo cover para comparar sin deformar la foto.
+                    const lado = Math.min(img.naturalWidth, img.naturalHeight);
+                    const sx = (img.naturalWidth - lado) / 2;
+                    const sy = (img.naturalHeight - lado) / 2;
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = "high";
+                    ctx.drawImage(img, sx, sy, lado, lado, 0, 0, 16, 16);
+                    const px = ctx.getImageData(0, 0, 16, 16).data;
                     const v = [];
+                    const grises = [];
                     for (let i = 0; i < px.length; i += 4) {
-                        // Color y luminosidad reducidos a una escala comparable.
-                        v.push(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+                        const r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
+                        v.push(r, g, b);
+                        grises.push((0.299 * r + 0.587 * g + 0.114 * b));
+                    }
+                    // Añade estructura de luminosidad en bloques 2x2: ayuda si cambia un poco el color o la luz.
+                    for (let y = 0; y < 16; y += 2) {
+                        for (let x = 0; x < 16; x += 2) {
+                            let suma = 0;
+                            for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) suma += grises[(y + dy) * 16 + x + dx];
+                            v.push(suma / 4);
+                        }
                     }
                     resolve(v);
                 } catch (err) { reject(err); }
@@ -3120,18 +3156,20 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
                 img.src = urlTemporal;
             } else img.src = origen;
         });
-        if (clave) {
-            cacheVectores.set(clave, promesa);
-            if (cacheVectores.size > 700) cacheVectores.delete(cacheVectores.keys().next().value);
+        if (typeof clave === "string") {
+            cacheVectores.set(clave, tarea);
+            tarea.catch(() => cacheVectores.delete(clave));
         }
-        return promesa;
+        return tarea;
     }
 
     function distancia(a, b) {
         if (!a || !b || a.length !== b.length) return Infinity;
         let suma = 0;
-        for (let i = 0; i < a.length; i++) suma += Math.abs(a[i] - b[i]);
-        return suma / a.length;
+        // La parte final del vector representa la distribución de luz; se pondera un poco menos.
+        const limiteColor = 16 * 16 * 3;
+        for (let i = 0; i < a.length; i++) suma += Math.abs(a[i] - b[i]) * (i < limiteColor ? 1 : 0.65);
+        return suma / (limiteColor + (a.length - limiteColor) * 0.65);
     }
 
     input.addEventListener("change", async () => {
@@ -3142,29 +3180,30 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
         preview.hidden = false;
         preview.style.margin = "12px 0";
         preview.style.textAlign = "center";
-        if (urlFotoTemporal) URL.revokeObjectURL(urlFotoTemporal);
-        urlFotoTemporal = URL.createObjectURL(archivo);
-        preview.innerHTML = `<img src="${urlFotoTemporal}" alt="Foto seleccionada" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:12px">`;
+        const urlLocal = URL.createObjectURL(archivo);
+        preview.innerHTML = `<img src="${urlLocal}" alt="Foto seleccionada" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:12px">`;
         try {
             const referencia = await vectorImagen(archivo);
             const candidatos = [];
             let noLeidas = 0;
-            const conFoto = peluches.map(p => ({ p, url: obtenerFotos(p)[0] })).filter(x => x.url);
-            // Máximo 6 lecturas simultáneas: evita bloquear el teléfono al comparar inventarios grandes.
-            for (let i = 0; i < conFoto.length; i += 6) {
-                const lote = conFoto.slice(i, i + 6);
-                const comparaciones = await Promise.all(lote.map(async ({p, url}) => {
-                    try {
-                        const v = await vectorImagen(url);
-                        return { p, distancia: distancia(referencia, v) };
-                    } catch (_) {
-                        noLeidas++;
-                        return null;
+            const conFotos = peluches.filter(p => obtenerFotos(p).length);
+            let siguiente = 0;
+            const trabajadores = Array.from({ length: Math.min(4, conFotos.length) }, async () => {
+                while (true) {
+                    const indice = siguiente++;
+                    if (indice >= conFotos.length) break;
+                    const p = conFotos[indice];
+                    let mejor = Infinity;
+                    for (const url of obtenerFotos(p).slice(0, 3)) {
+                        try {
+                            const v = await vectorImagen(url);
+                            mejor = Math.min(mejor, distancia(referencia, v));
+                        } catch (e) { noLeidas++; }
                     }
-                }));
-                comparaciones.filter(Boolean).forEach(x => candidatos.push(x));
-                estado.textContent = `Comparando fotografías: ${Math.min(i + lote.length, conFoto.length)} de ${conFoto.length}...`;
-            }
+                    if (Number.isFinite(mejor)) candidatos.push({ p, distancia: mejor });
+                }
+            });
+            await Promise.all(trabajadores);
             candidatos.sort((a, b) => a.distancia - b.distancia);
             const mejores = candidatos.slice(0, 12);
             if (!mejores.length) {
@@ -3173,7 +3212,7 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
                     : "No hay peluches con fotografías para comparar.";
                 return;
             }
-            estado.textContent = `Se encontraron ${candidatos.length} posibles coincidencias. Los primeros son los más parecidos por color y apariencia general.`;
+            estado.textContent = `Se encontraron ${candidatos.length} posibles coincidencias. Los primeros son los más parecidos por color, distribución y estructura visual. No es una identificación perfecta.`;
             resultados.style.display = "grid";
             resultados.style.gap = "10px";
             resultados.innerHTML = mejores.map(({p, distancia: d}) => {
@@ -3181,7 +3220,7 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
                 const similitud = Math.max(0, Math.min(99, Math.round((1 - d) * 100)));
                 return `<button type="button" class="foto-busqueda-resultado" data-foto-id="${escaparHTML(p.id)}" style="display:flex;align-items:center;gap:12px;width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;text-align:left;cursor:pointer;color:inherit">
                     ${f ? `<img src="${escaparHTML(f)}" alt="" loading="lazy" style="width:76px;height:76px;flex:0 0 76px;object-fit:cover;border-radius:9px">` : `<span style="width:76px;height:76px;display:grid;place-items:center">🧸</span>`}
-                    <span style="display:grid;gap:4px;min-width:0"><strong>${escaparHTML(p.nombre || "Sin nombre")}</strong><small>${escaparHTML(p.codigo || "Sin código")} · ${escaparHTML(p.tamano || p.medida || "Sin medida")}</small><small>Similitud de color/apariencia: ${similitud}%</small></span>
+                    <span style="display:grid;gap:4px;min-width:0"><strong>${escaparHTML(p.nombre || "Sin nombre")}</strong><small>${escaparHTML(p.codigo || "Sin código")} · ${escaparHTML(p.tamano || p.medida || "Sin medida")}</small><small>Parecido visual estimado: ${similitud}%</small></span>
                 </button>`;
             }).join("");
             resultados.querySelectorAll("[data-foto-id]").forEach(el => el.addEventListener("click", () => {
