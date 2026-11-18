@@ -1,7 +1,7 @@
 *{box-sizing:border-box}
 :root{
  --primario:#8b5cf6;--primario-oscuro:#6d28d9;--secundario:#ec4899;
- --fondo:#f6f4ff;--texto:#29233d;--muted:#756f86;--borde:#e9e5f2;
+ --fondo:#fff5fa;--texto:#33283b;--muted:#817487;--borde:#f1dce9;
  --blanco:#fff;--sombra:0 12px 35px rgba(72,45,120,.10);
 }
 html{scroll-behavior:smooth}
@@ -403,206 +403,41 @@ body.menu-abierto{overflow:hidden}
 }
 
 
-/* =========================================================
-   AJUSTE RESPONSIVE: TARJETAS COMPACTAS Y DETALLE SIN DESBORDE
-   Conserva colores, datos y funciones del diseño original.
-   ========================================================= */
-
-/* Catálogo de escritorio: tarjetas en columnas, no una lista larga */
-@media (min-width: 701px) {
-  #lista {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)) !important;
-    gap: 16px !important;
-    align-items: start;
-  }
-  #lista .tarjeta {
-    display: flex !important;
-    flex-direction: column !important;
-    min-width: 0;
-    overflow: hidden;
-  }
-  #lista .imagen-principal {
-    height: 210px !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-  }
-  #lista .imagen-principal img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain !important;
-    padding: 8px;
-  }
-  #lista .miniaturas { justify-content: center; }
-  #lista .info { padding: 12px 14px 5px !important; }
-  #lista .info h3 { font-size: 18px !important; }
-  #lista .precio { font-size: 22px !important; }
-  #lista .datos {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    padding: 0 14px 10px;
-    gap: 6px;
-  }
-  #lista .dato { padding: 7px 8px !important; }
-  #lista .botones {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    padding: 8px 10px 11px !important;
-    gap: 6px;
-  }
+/* Catálogo compacto: 2 peluches por fila en móvil y 3 en escritorio */
+:root{--primario:#b56acb;--primario-oscuro:#88479f;--secundario:#e8a2c4;--fondo:#fff3f8;--borde:#f0d8e7}
+body{background:radial-gradient(circle at 5% 5%,rgba(255,190,218,.34),transparent 28%),radial-gradient(circle at 95% 10%,rgba(202,170,235,.24),transparent 27%),linear-gradient(135deg,#fff8fb 0%,#f8f1fb 100%)}
+.encabezado{background:linear-gradient(120deg,#c17acb 0%,#d99acb 52%,#efb5cc 100%)}
+#lista{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important;align-items:start}
+#lista .tarjeta{display:flex!important;flex-direction:column!important;min-width:0!important;overflow:hidden;border-color:#f0dce9;border-radius:17px}
+#lista .imagen-principal{height:clamp(150px,19vw,220px)!important;min-height:0!important;margin:0!important;border-radius:0!important;background:linear-gradient(135deg,#fff0f6,#f5edfb)}
+#lista .imagen-principal img{width:100%;height:100%;object-fit:contain!important;padding:5px}
+#lista .info{padding:9px 11px 4px!important}
+#lista .info h3{font-size:clamp(14px,1.3vw,18px)!important;line-height:1.2;min-height:2.3em;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#lista .etiquetas{margin-bottom:4px;gap:4px}
+#lista .etiqueta-chip{font-size:10px;padding:3px 6px}
+#lista .precio{font-size:19px!important;margin:3px 0 6px!important}
+#lista .datos{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important;padding:0 9px 8px!important}
+#lista .dato{padding:6px 7px!important;min-width:0}
+#lista .dato small{font-size:9px!important}
+#lista .dato strong{font-size:11px!important}
+#lista .observaciones{display:none!important}
+#lista .botones{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important;padding:6px 8px 9px!important;margin-top:auto}
+#lista .botones button{min-height:34px!important;padding:5px 3px!important;font-size:10px!important}
+@media(max-width:700px){
+#lista{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+#lista .imagen-principal{height:clamp(115px,34vw,155px)!important}
+#lista .info{padding:7px 7px 3px!important}
+#lista .info h3{font-size:12px!important;min-height:2.4em}
+#lista .precio{font-size:16px!important}
+#lista .dato{padding:5px!important}
+#lista .dato small{font-size:8px!important}
+#lista .dato strong{font-size:10px!important}
+#lista .botones button{min-height:31px!important;font-size:9px!important}
 }
-
-/* Teléfono: dos peluches por fila y contenido resumido */
-@media (max-width: 700px) {
-  #lista {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 9px !important;
-  }
-  #lista .tarjeta {
-    display: flex !important;
-    flex-direction: column !important;
-    min-width: 0 !important;
-    border-radius: 15px !important;
-    overflow: hidden;
-  }
-  #lista .imagen-principal {
-    height: clamp(105px, 31vw, 145px) !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-  }
-  #lista .imagen-principal img {
-    width: 100%;
-    height: 100%;
-    min-height: 0 !important;
-    object-fit: contain !important;
-    padding: 5px;
-  }
-  #lista .miniaturas {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    max-width: 100%;
-    padding: 4px 5px !important;
-    gap: 4px;
-  }
-  #lista .miniaturas img { width: 27px; height: 27px; flex-basis: 27px; }
-  #lista .info {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    padding: 7px 8px 3px !important;
-  }
-  #lista .info h3 {
-    font-size: clamp(11px, 3.2vw, 14px) !important;
-    line-height: 1.18 !important;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    min-height: 2.35em;
-  }
-  #lista .etiquetas { gap: 3px !important; }
-  #lista .etiqueta-chip {
-    font-size: 9px !important;
-    padding: 3px 5px !important;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  #lista .precio {
-    font-size: 17px !important;
-    margin: 3px 0 5px !important;
-  }
-  #lista .datos {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 4px !important;
-    padding: 0 7px 7px !important;
-  }
-  #lista .dato { min-width: 0; padding: 5px 6px !important; border-radius: 8px; }
-  #lista .dato small { font-size: 8px !important; line-height: 1.1; }
-  #lista .dato strong { font-size: 10px !important; margin-top: 2px; }
-  #lista .observaciones { display: none !important; }
-  #lista .botones {
-    grid-column: auto !important;
-    grid-row: auto !important;
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 4px !important;
-    padding: 5px 6px 7px !important;
-    margin-top: auto;
-  }
-  #lista .botones button {
-    min-width: 0;
-    min-height: 31px !important;
-    padding: 4px 2px !important;
-    font-size: 9px !important;
-    border-radius: 8px !important;
-  }
-}
-
-/* Pantallas muy estrechas: mantener dos columnas sin desbordar */
-@media (max-width: 380px) {
-  #lista { gap: 7px !important; }
-  #lista .info { padding: 6px 6px 2px !important; }
-  #lista .dato { padding: 4px 5px !important; }
-  #lista .dato small { font-size: 7px !important; }
-  #lista .dato strong { font-size: 9px !important; }
-  #lista .botones button { font-size: 8px !important; }
-}
-
-/* Ventana de detalle: imagen adaptable y sin barras horizontales */
-#detalleModal { overflow-y: auto; overflow-x: hidden; }
-#detalleModal .detalle-card {
-  width: min(780px, calc(100vw - 32px)) !important;
-  max-width: 780px;
-  max-height: 92vh;
-  overflow-x: hidden !important;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-#detalleModal .detalle-contenido {
-  display: grid;
-  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) !important;
-  gap: 16px;
-  min-width: 0;
-  align-items: start;
-}
-#detalleModal .detalle-imagen {
-  display: block;
-  width: 100% !important;
-  max-width: 100%;
-  height: 260px !important;
-  min-width: 0;
-  object-fit: contain !important;
-  padding: 5px;
-  box-sizing: border-box;
-}
-#detalleModal .detalle-contenido > div { min-width: 0; }
-#detalleModal .detalle-datos {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-}
-#detalleModal .detalle-dato { min-width: 0; overflow-wrap: anywhere; }
-#detalleModal .detalle-barcode { max-width: 100%; height: auto; }
-#detalleModal .detalle-botones {
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-}
-@media (max-width: 700px) {
-  #detalleModal { padding: 8px; }
-  #detalleModal .detalle-card {
-    width: 100% !important;
-    max-height: 94vh;
-    padding: 12px;
-  }
-  #detalleModal .detalle-contenido {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-  #detalleModal .detalle-imagen { height: 190px !important; }
-  #detalleModal .detalle-botones {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
+@media(max-width:370px){
+#lista{gap:6px!important}
+#lista .imagen-principal{height:108px!important}
+#lista .info h3{font-size:11px!important}
+#lista .dato small{font-size:7px!important}
+#lista .dato strong{font-size:9px!important}
 }
