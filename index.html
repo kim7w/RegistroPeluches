@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20261118-original02">
+    <link rel="stylesheet" href="style.css?v=20261119-tarjetas-resumen01">
 </head>
 <body>
 <div class="contenedor" id="topPagina">
@@ -59,23 +59,23 @@
     </header>
 
     <section class="resumen" id="seccionResumen" aria-label="Resumen del inventario">
-        <div class="estadistica">
+        <div class="estadistica resumen-acceso" data-resumen-filtro="todos" role="button" tabindex="0" aria-label="Ver todos los peluches">
             <span class="estadistica-icono">🧸</span>
             <div><strong id="totalPeluche">0</strong><small>Peluches</small></div>
         </div>
-        <div class="estadistica">
+        <div class="estadistica resumen-acceso" data-resumen-filtro="todos" role="button" tabindex="0" aria-label="Ver inventario completo">
             <span class="estadistica-icono">📦</span>
             <div><strong id="totalUnidades">0</strong><small>Unidades</small></div>
         </div>
-        <div class="estadistica">
+        <div class="estadistica resumen-acceso" data-resumen-filtro="disponible" role="button" tabindex="0" aria-label="Ver peluches disponibles">
             <span class="estadistica-icono">✨</span>
             <div><strong id="totalDisponibles">0</strong><small>Disponibles</small></div>
         </div>
-        <div class="estadistica">
+        <div class="estadistica resumen-acceso" data-resumen-filtro="agotado" role="button" tabindex="0" aria-label="Ver peluches agotados">
             <span class="estadistica-icono">🏷️</span>
             <div><strong id="totalAgotados">0</strong><small>Agotados</small></div>
         </div>
-        <div class="estadistica alerta" id="tarjetaBajo">
+        <div class="estadistica alerta resumen-acceso" id="tarjetaBajo" data-resumen-filtro="bajo" role="button" tabindex="0" aria-label="Ver peluches con inventario bajo">
             <span class="estadistica-icono">⚠️</span>
             <div><strong id="totalBajo">0</strong><small>Inventario bajo</small></div>
         </div>
@@ -178,7 +178,7 @@
         </form>
     </section>
 
-    <div class="seleccion-entrada">
+    <div class="seleccion-entrada" hidden aria-hidden="true">
         <button type="button" id="btnModoSeleccion" aria-pressed="false">☑️ Seleccionar peluches para etiquetas</button>
     </div>
     <section class="seleccion-toolbar" id="seleccionToolbar" hidden>
@@ -336,6 +336,6 @@
 
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script type="module" src="script.js?v=20261118-original02"></script>
+<script type="module" src="script.js?v=20261119-tarjetas-resumen01"></script>
 </body>
 </html>
