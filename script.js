@@ -2916,6 +2916,23 @@ document.querySelectorAll("[data-menu-action]").forEach(boton => {
     });
 });
 
+
+
+// Accesos directos desde las tarjetas del resumen superior.
+document.querySelectorAll(".resumen-acceso[data-resumen-filtro]").forEach(tarjeta => {
+    const activar = () => {
+        const filtro = tarjeta.dataset.resumenFiltro || "todos";
+        activarFiltroDesdeMenu(filtro);
+    };
+    tarjeta.addEventListener("click", activar);
+    tarjeta.addEventListener("keydown", evento => {
+        if (evento.key === "Enter" || evento.key === " ") {
+            evento.preventDefault();
+            activar();
+        }
+    });
+});
+
 // Historial desde el detalle de un peluche.
 document.getElementById("detalleHistorial")?.addEventListener("click", () => {
     if (!detalleId) return;
