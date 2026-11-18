@@ -42,7 +42,6 @@ const btnCancelar = document.getElementById("btnCancelar");
 
 let peluches = [];
 let editando = null;
-let fotosConservadasEdicion = null;
 let filtroActivo = "todos";
 let ordenActivo = "reciente";
 const seleccionados = new Set();
@@ -566,9 +565,38 @@ function crearTarjeta(p) {
                 }
             </div>
 
-            <div class="modo-rapido-tarjeta" aria-label="Acciones rápidas de inventario">
-                <button type="button" class="rapido-entrada" onclick="abrirMovimiento('${p.id}','entrada')">＋ Entrada</button>
-                <button type="button" class="rapido-salida" onclick="abrirMovimiento('${p.id}','salida')">− Salida</button>
+            <div class="botones">
+                <button
+                    class="btn-entrada"
+                    type="button"
+                    onclick="abrirMovimiento('${p.id}','entrada')"
+                >
+                    ➕ Entrada
+                </button>
+
+                <button
+                    class="btn-salida"
+                    type="button"
+                    onclick="abrirMovimiento('${p.id}','salida')"
+                >
+                    ➖ Salida
+                </button>
+
+                <button
+                    class="btn-editar"
+                    type="button"
+                    onclick="editarPeluche('${p.id}')"
+                >
+                    ✏️ Editar
+                </button>
+
+                <button
+                    class="btn-eliminar"
+                    type="button"
+                    onclick="eliminarPeluche('${p.id}')"
+                >
+                    🗑️
+                </button>
             </div>
         </article>
     `;
@@ -738,47 +766,27 @@ async function subirImagenCloudinary(archivo) {
 }
 
 if (foto) {
-    function renderizarGaleriaPrevia() {
+    foto.addEventListener("change", () => {
         if (!galeriaPrevia) return;
+
         galeriaPrevia.innerHTML = "";
 
-        (fotosConservadasEdicion || []).forEach((url, indice) => {
-            const tarjeta = document.createElement("div");
-            tarjeta.className = "foto-edicion-item";
-            const img = document.createElement("img");
-            img.src = url;
-            img.alt = `Foto guardada ${indice + 1}`;
-            const quitar = document.createElement("button");
-            quitar.type = "button";
-            quitar.className = "foto-edicion-quitar";
-            quitar.textContent = "×";
-            quitar.title = "Quitar esta foto del registro";
-            quitar.addEventListener("click", () => {
-                fotosConservadasEdicion.splice(indice, 1);
-                renderizarGaleriaPrevia();
-            });
-            tarjeta.append(img, quitar);
-            galeriaPrevia.appendChild(tarjeta);
-        });
-
-        [...(foto?.files || [])].forEach(file => {
+        [...foto.files].forEach(file => {
             if (!file.type.startsWith("image/")) return;
-            const tarjeta = document.createElement("div");
-            tarjeta.className = "foto-edicion-item foto-nueva";
-            const img = document.createElement("img");
-            const url = URL.createObjectURL(file);
-            img.src = url;
-            img.alt = "Foto nueva";
-            img.onload = () => URL.revokeObjectURL(url);
-            const etiqueta = document.createElement("small");
-            etiqueta.textContent = "Nueva";
-            tarjeta.append(img, etiqueta);
-            galeriaPrevia.appendChild(tarjeta);
-        });
-    }
 
-    foto.addEventListener("change", renderizarGaleriaPrevia);
-    window.renderizarGaleriaPrevia = renderizarGaleriaPrevia;
+            const url = URL.createObjectURL(file);
+            const img = document.createElement("img");
+
+            img.src = url;
+            img.alt = "Vista previa";
+
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+            };
+
+            galeriaPrevia.appendChild(img);
+        });
+    });
 }
 
 
@@ -942,15 +950,23 @@ async function guardarFormulario(e) {
             if (campoEtiqueta) campoEtiqueta.value = etiquetaFinal;
         }
 
-        let fotos = editando
-            ? [...(fotosConservadasEdicion ?? peluches.find(p => p.id === editando)?.fotos ?? [])]
-            : [];
+        let fotos = [];
 
         if (foto?.files?.length) {
-            const nuevasFotos = (
-                await Promise.all([...foto.files].map(subirImagenCloudinary))
+            fotos = (
+                await Promise.all(
+                    [...foto.files].map(subirImagenCloudinary)
+                )
             ).filter(Boolean);
-            fotos = [...fotos, ...nuevasFotos];
+
+        } else if (editando) {
+            const existente = peluches.find(
+                p => p.id === editando
+            );
+
+            fotos = existente
+                ? obtenerFotos(existente)
+                : [];
         }
 
         // El código interno / código del producto puede repetirse.
@@ -1120,9 +1136,17 @@ function editarPeluche(id) {
     document.getElementById("fechaIngreso").value =
         p.fechaIngreso || "";
 
+    if (galeriaPrevia) {
+        galeriaPrevia.innerHTML =
+            obtenerFotos(p)
+                .map(
+                    url =>
+                        `<img src="${escaparHTML(url)}" alt="Foto guardada">`
+                )
+                .join("");
+    }
+
     editando = id;
-    fotosConservadasEdicion = obtenerFotos(p);
-    window.renderizarGaleriaPrevia?.();
 
     if (btnGuardar) {
         btnGuardar.textContent =
@@ -1144,7 +1168,6 @@ function cancelarEdicion() {
     }
 
     editando = null;
-    fotosConservadasEdicion = null;
 
     if (btnGuardar) {
         btnGuardar.textContent =
@@ -2044,19 +2067,11 @@ function procesarCodigoEscaneado(codigo) {
     const encontrado = buscarProductoPorCodigo(valor);
 
     if (encontrado) {
-        const cantidad = obtenerCantidad(encontrado);
-        const resumen = `Ya existe este código: ${valor}\n\nPeluche: ${encontrado.nombre || "Sin nombre"}\nCódigo interno: ${encontrado.codigo || "—"}\nMedida: ${encontrado.tamano || encontrado.medida || "—"}\nPrecio: Q${encontrado.precio ?? "—"}\nExistencia total: ${cantidad}\n\nAceptar: abrir la ficha para actualizarla.\nCancelar: ver su ficha y desde allí registrar un reingreso de unidades.`;
         if (buscar) buscar.value = encontrado.etiqueta || encontrado.codigo || valor;
         filtroActivo = "todos";
         document.querySelectorAll(".filtro").forEach(boton => boton.classList.toggle("activo", boton.dataset.filtro === "todos"));
         actualizarInterfazBusqueda();
-        if (window.confirm(resumen)) {
-            cerrarDetalle();
-            editarPeluche(encontrado.id);
-            document.getElementById("medida")?.focus();
-        } else {
-            setTimeout(() => abrirDetalle(encontrado.id), 80);
-        }
+        setTimeout(() => abrirDetalle(encontrado.id), 80);
     } else {
         cancelarEdicion();
         abrirFormulario();
@@ -2431,15 +2446,6 @@ document.getElementById("detalleEditar")?.addEventListener("click", () => {
     const id = detalleId;
     cerrarDetalle();
     editarPeluche(id);
-});
-document.getElementById("detalleEliminar")?.addEventListener("click", () => {
-    if (!detalleId) return;
-    const id = detalleId;
-    cerrarDetalle();
-    eliminarPeluche(id);
-});
-document.getElementById("btnSalirModoRapido")?.addEventListener("click", () => {
-    if (document.body.classList.contains("modo-trabajo-rapido")) alternarModoRapido();
 });
 
 
@@ -2876,89 +2882,6 @@ actualizarResumen = function() {
     if (typeof actualizarMenuFavoritos === "function") actualizarMenuFavoritos();
 };
 
-// ============================================================
-// DETECCIÓN Y LIMPIEZA SEGURA DE DUPLICADOS EXACTOS
-// Compara todos los campos guardados; solo ignora el ID de Firestore.
-// Crea una copia de seguridad descargable antes de borrar sobrantes.
-// ============================================================
-function ordenarObjetoParaComparar(valor) {
-    if (Array.isArray(valor)) return valor.map(ordenarObjetoParaComparar);
-    if (valor && typeof valor === "object") {
-        const salida = {};
-        Object.keys(valor).sort().forEach(k => {
-            salida[k] = ordenarObjetoParaComparar(valor[k]);
-        });
-        return salida;
-    }
-    return valor;
-}
-
-function claveDatosExactos(producto) {
-    const datos = { ...producto };
-    delete datos.id;
-    return JSON.stringify(ordenarObjetoParaComparar(datos));
-}
-
-function descargarRespaldoAntesDeBorrar() {
-    const contenido = JSON.stringify({
-        fechaRespaldo: new Date().toISOString(),
-        coleccion: "peluches",
-        totalRegistros: peluches.length,
-        peluches
-    }, null, 2);
-    const blob = new Blob([contenido], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement("a");
-    enlace.href = url;
-    enlace.download = `respaldo-peluches-antes-de-duplicados-${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(enlace);
-    enlace.click();
-    enlace.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
-async function revisarDuplicadosExactos() {
-    const grupos = new Map();
-    for (const producto of peluches) {
-        const clave = claveDatosExactos(producto);
-        if (!grupos.has(clave)) grupos.set(clave, []);
-        grupos.get(clave).push(producto);
-    }
-    const duplicados = [...grupos.values()].filter(grupo => grupo.length > 1);
-    const sobrantes = duplicados.reduce((suma, grupo) => suma + grupo.length - 1, 0);
-
-    if (!sobrantes) {
-        alert("No encontré duplicados exactamente iguales. No se eliminó ningún peluche.");
-        return;
-    }
-
-    const detalle = duplicados.slice(0, 12).map((grupo, i) =>
-        `${i + 1}. ${grupo[0].nombre || "Sin nombre"} · Código: ${grupo[0].etiqueta || grupo[0].codigo || "—"} · ${grupo.length} registros iguales`
-    ).join("\\n");
-    const continuar = window.confirm(
-        `Encontré ${duplicados.length} grupo(s) de duplicados exactos.\\nSe conservará 1 registro por grupo y se eliminarán ${sobrantes} copia(s).\\n\\n${detalle}${duplicados.length > 12 ? "\\n… y más grupos." : ""}\\n\\nAntes de borrar se descargará un respaldo completo.\\n\\n¿Deseas continuar?`
-    );
-    if (!continuar) return;
-
-    descargarRespaldoAntesDeBorrar();
-    const idsEliminar = duplicados.flatMap(grupo => grupo.slice(1).map(p => p.id));
-    let eliminados = 0;
-    try {
-        for (const id of idsEliminar) {
-            await deleteDoc(doc(db, "peluches", id));
-            eliminados++;
-        }
-        peluches = peluches.filter(p => !idsEliminar.includes(p.id));
-        actualizarResumen();
-        actualizarInterfazBusqueda();
-        alert(`Listo. Se eliminaron ${eliminados} duplicado(s) exacto(s). Se conservó un registro de cada grupo. Los registros con cualquier dato diferente no se tocaron.`);
-    } catch (error) {
-        console.error("Error limpiando duplicados:", error);
-        await cargarPeluches();
-        alert(`La limpieza se detuvo después de eliminar ${eliminados} registro(s). Se actualizó la lista; revisa el respaldo descargado y vuelve a ejecutar la revisión si hace falta.`);
-    }
-}
-
 // Menú hamburguesa.
 document.getElementById("btnMenu")?.addEventListener("click", e => {
     e.stopPropagation();
@@ -2990,24 +2913,6 @@ document.querySelectorAll("[data-menu-action]").forEach(boton => {
         if (accion === "etiquetas") { cerrarMenuPrincipal(); document.getElementById("btnImprimir")?.click(); return; }
         if (accion === "exportar") { cerrarMenuPrincipal(); document.getElementById("btnExportar")?.click(); return; }
         if (accion === "importar") { cerrarMenuPrincipal(); document.getElementById("btnImportar")?.click(); return; }
-        if (accion === "duplicados") { cerrarMenuPrincipal(); revisarDuplicadosExactos(); return; }
-    });
-});
-
-
-
-// Accesos directos desde las tarjetas del resumen superior.
-document.querySelectorAll(".resumen-acceso[data-resumen-filtro]").forEach(tarjeta => {
-    const activar = () => {
-        const filtro = tarjeta.dataset.resumenFiltro || "todos";
-        activarFiltroDesdeMenu(filtro);
-    };
-    tarjeta.addEventListener("click", activar);
-    tarjeta.addEventListener("keydown", evento => {
-        if (evento.key === "Enter" || evento.key === " ") {
-            evento.preventDefault();
-            activar();
-        }
     });
 });
 
@@ -3172,35 +3077,30 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
     cerrar?.addEventListener("click", cerrarModal);
     modal.addEventListener("click", e => { if (e.target === modal) cerrarModal(); });
 
-    const cacheVectores = new Map();
     function vectorImagen(origen) {
-        const cacheKey = typeof origen === "string" ? origen : null;
-        if (cacheKey && cacheVectores.has(cacheKey)) return cacheVectores.get(cacheKey);
-        const tarea = new Promise((resolve, reject) => {
+        return new Promise((resolve, reject) => {
             const img = new Image();
             if (typeof origen === "string") img.crossOrigin = "anonymous";
             img.onload = () => {
                 try {
                     const canvas = document.createElement("canvas");
-                    canvas.width = 16;
-                    canvas.height = 16;
+                    canvas.width = 12;
+                    canvas.height = 12;
                     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                    if (!ctx) throw new Error("Canvas no disponible");
-                    ctx.drawImage(img, 0, 0, 16, 16);
-                    const px = ctx.getImageData(0, 0, 16, 16).data;
+                    ctx.drawImage(img, 0, 0, 12, 12);
+                    const px = ctx.getImageData(0, 0, 12, 12).data;
                     const v = [];
-                    // RGB normalizado: comparación visual aproximada, no reconocimiento de identidad.
                     for (let i = 0; i < px.length; i += 4) {
+                        // Color y luminosidad reducidos a una escala comparable.
                         v.push(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
                     }
                     resolve(v);
                 } catch (err) { reject(err); }
             };
             img.onerror = () => reject(new Error("No se pudo leer la imagen"));
-            img.src = origen instanceof Blob ? URL.createObjectURL(origen) : origen;
+            if (origen instanceof Blob) img.src = URL.createObjectURL(origen);
+            else img.src = origen;
         });
-        if (cacheKey) cacheVectores.set(cacheKey, tarea);
-        return tarea;
     }
 
     function distancia(a, b) {
@@ -3214,11 +3114,7 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
         const archivo = input.files?.[0];
         if (!archivo) return;
         resultados.innerHTML = "";
-        if (!peluches.length) {
-            estado.textContent = "El inventario todavía no está cargado. Espera unos segundos y vuelve a intentarlo.";
-            return;
-        }
-        estado.textContent = `Analizando la foto y comparándola con ${peluches.length} peluches...`;
+        estado.textContent = "Analizando la foto y comparándola con las imágenes del inventario...";
         preview.hidden = false;
         preview.style.margin = "12px 0";
         preview.style.textAlign = "center";
@@ -3228,25 +3124,17 @@ buscar?.addEventListener("keydown",e=>{if(e.key==="Enter")guardarBusquedaRecient
             const referencia = await vectorImagen(archivo);
             const candidatos = [];
             let noLeidas = 0;
-            const trabajos = peluches.flatMap(p => obtenerFotos(p).slice(0, 2).map(url => ({ p, url })));
-            let indice = 0;
-            const concurrencia = Math.min(6, Math.max(1, trabajos.length));
-            const mejoresPorId = new Map();
-            async function trabajador() {
-                while (indice < trabajos.length) {
-                    const trabajo = trabajos[indice++];
+            for (const p of peluches) {
+                const fotos = obtenerFotos(p);
+                if (!fotos.length) continue;
+                let mejor = Infinity;
+                for (const url of fotos.slice(0, 2)) {
                     try {
-                        const v = await vectorImagen(trabajo.url);
-                        const d = distancia(referencia, v);
-                        const previo = mejoresPorId.get(trabajo.p.id);
-                        if (previo === undefined || d < previo) mejoresPorId.set(trabajo.p.id, d);
+                        const v = await vectorImagen(url);
+                        mejor = Math.min(mejor, distancia(referencia, v));
                     } catch (e) { noLeidas++; }
                 }
-            }
-            await Promise.all(Array.from({ length: concurrencia }, () => trabajador()));
-            for (const p of peluches) {
-                const d = mejoresPorId.get(p.id);
-                if (Number.isFinite(d)) candidatos.push({ p, distancia: d });
+                if (Number.isFinite(mejor)) candidatos.push({ p, distancia: mejor });
             }
             candidatos.sort((a, b) => a.distancia - b.distancia);
             const mejores = candidatos.slice(0, 12);
