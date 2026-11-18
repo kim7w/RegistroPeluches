@@ -1,66 +1,4 @@
-/* =========================================================
-   REDISEÑO MODERNO LAVANDA + ROSA · NOVIEMBRE 2026
-   ========================================================= */
-:root{
- --primario:#8b5cf6;--primario-oscuro:#6d28d9;--secundario:#e879c5;
- --fondo:#f9e7f5;--texto:#2d2540;--muted:#766b85;--borde:#eee3f4;
- --sombra:0 12px 34px rgba(104,65,145,.10);
-}
-body{
- padding:clamp(10px,2.2vw,24px);
- background:radial-gradient(circle at 0 0,rgba(232,121,197,.20),transparent 34%),
- radial-gradient(circle at 100% 12%,rgba(139,92,246,.18),transparent 32%),
- linear-gradient(145deg,#fff8fd 0%,#f4eaff 48%,#fcecf7 100%);
-}
-.encabezado{position:relative;gap:16px;padding:clamp(18px,3vw,30px);border:1px solid rgba(255,255,255,.45);background:linear-gradient(120deg,#7c3aed 0%,#a855f7 52%,#e879c5 100%);box-shadow:0 18px 44px rgba(124,58,237,.20)}
-.encabezado-titulo span{font-size:15px;letter-spacing:.01em}
-.btn-menu{border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.18);color:#fff;box-shadow:none}
-.btn-menu:hover{background:rgba(255,255,255,.28)}
-.resumen{gap:12px}
-.estadistica{border:1px solid rgba(255,255,255,.92);border-radius:21px;box-shadow:0 9px 26px rgba(104,65,145,.08)}
-.estadistica-icono{background:#f2eaff}
-.panel-busqueda,.formulario-panel{border:1px solid rgba(255,255,255,.9);border-radius:24px;box-shadow:0 12px 32px rgba(104,65,145,.08)}
-.filtro{transition:transform .15s ease,box-shadow .15s ease}
-.filtro.activo{box-shadow:0 7px 18px rgba(139,92,246,.20)}
-.tarjeta{border:1px solid rgba(255,255,255,.95);border-radius:23px;box-shadow:0 10px 30px rgba(78,48,108,.10);transition:transform .18s ease,box-shadow .18s ease}
-.tarjeta:hover{transform:translateY(-2px);box-shadow:0 16px 38px rgba(78,48,108,.14)}
-.imagen-principal{background:linear-gradient(135deg,#f2eaff,#fce7f3)}
-.info h3{color:#302542}
-.etiqueta-chip{background:#f3eaff;color:#6d28d9}
-.precio{color:#7136d8}
-.dato{background:#f8f5fb}
-.dato.alerta{background:#fff6df}
-.botones button{border-radius:12px}
-.menu-overlay[hidden]{display:none!important}
-.menu-overlay{display:block;position:fixed!important;inset:0!important;z-index:10000!important;background:rgba(34,20,48,.46);opacity:0;pointer-events:none;transition:opacity .2s ease}
-.menu-overlay.visible{opacity:1;pointer-events:auto}
-.menu-lateral{position:fixed!important;left:0!important;top:0!important;bottom:0!important;width:min(350px,88vw)!important;z-index:10001!important;display:flex!important;flex-direction:column!important;overflow-y:auto!important;background:#fffaff!important;border-radius:0 24px 24px 0;box-shadow:18px 0 48px rgba(45,25,60,.22)!important;transform:translateX(-110%)!important;visibility:hidden!important;opacity:1!important;pointer-events:none!important;transition:transform .24s ease,visibility .24s ease!important}
-.menu-lateral.abierto{transform:translateX(0)!important;visibility:visible!important;pointer-events:auto!important}
-.menu-cabecera{background:linear-gradient(120deg,#f4eaff,#fdeafa);padding:22px 18px}
-.menu-marca>span{background:linear-gradient(135deg,#8b5cf6,#e879c5)}
-.menu-nav button{min-height:46px;border-radius:13px}
-.menu-nav button:active,.menu-nav button:hover{background:#f4eaff}
-body.menu-abierto{overflow:hidden}
-.seleccion-entrada{display:flex;justify-content:flex-end;margin:0 0 10px}
-.seleccion-entrada button{border:1px solid #e5d5fa;border-radius:13px;padding:10px 14px;background:#fff;color:#6d28d9;font-weight:900;box-shadow:0 5px 16px rgba(104,65,145,.07)}
-.seleccion-entrada button[aria-pressed="true"]{background:linear-gradient(120deg,#8b5cf6,#e879c5);color:#fff;border-color:transparent}
-.seleccion-toolbar[hidden]{display:none!important}
-.seleccion-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px;margin:0 0 12px;border:1px solid #e5d5fa;border-radius:16px;background:rgba(255,255,255,.96);box-shadow:var(--sombra)}
-.seleccion-toolbar button{border:0;border-radius:10px;padding:9px 11px;background:#f2eaff;color:#6d28d9;font-weight:900}
-.seleccion-toolbar #btnImprimirSeleccion{background:linear-gradient(120deg,#8b5cf6,#e879c5);color:#fff}
-.seleccion-check{display:none!important}
-.modo-seleccion-activo .seleccion-check{display:block!important;position:absolute;z-index:4;right:12px;top:12px;width:27px;height:27px;accent-color:#8b5cf6;cursor:pointer;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
-.modo-seleccion-activo .tarjeta.seleccionada{outline:3px solid #a78bfa;outline-offset:2px}
-#reader{min-height:260px;background:#17131d}
-#reader video{display:block!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:230px!important;object-fit:cover!important}
-@media(max-width:700px){
- body{padding:10px}
- .encabezado{gap:11px;padding:17px 14px;border-radius:22px}
- .encabezado-icono{width:54px;height:54px;flex-basis:54px;font-size:30px;border-radius:16px}
- .encabezado h1{font-size:clamp(19px,5vw,25px);line-height:1.08}
- .encabezado-titulo span{font-size:12px}
- .btn-menu{width:42px;height:42px;font-size:22px}
- .resumen{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
+.resumen{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
  .estadistica{padding:12px;border-radius:17px;gap:9px}
  .estadistica-icono{width:38px;height:38px;flex-basis:38px;font-size:19px}
  .estadistica strong{font-size:21px}
@@ -97,30 +35,84 @@ body.menu-abierto{overflow:hidden}
 }
 @media(min-width:701px){#lista{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:19px}}
 
-/* ===== Ajuste final: tarjetas legibles en teléfono ===== */
-@media(max-width:700px){
-  #lista{grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
-  #lista .tarjeta{display:flex!important;flex-direction:column!important;min-width:0;overflow:hidden;border-radius:18px}
-  #lista .imagen-principal{height:190px!important;min-height:190px!important;max-height:190px!important}
-  #lista .imagen-principal img{height:100%!important;min-height:190px!important;object-fit:cover}
-  #lista .miniaturas{display:flex;grid-column:auto;grid-row:auto;overflow-x:auto;flex-wrap:nowrap;padding:7px 10px 0}
-  #lista .miniaturas img{width:42px;height:42px;flex:0 0 42px}
-  #lista .info{padding:11px 12px 7px;min-width:0}
-  #lista .info h3{font-size:16px;line-height:1.2;overflow-wrap:anywhere}
-  #lista .etiquetas{gap:5px}
-  #lista .etiqueta-chip{font-size:10px}
-  #lista .precio{font-size:19px;margin:5px 0 8px}
-  #lista .datos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:0 12px 8px;min-width:0}
-  #lista .dato{min-width:0;padding:7px 8px}
-  #lista .dato small{font-size:9px}
-  #lista .dato strong{font-size:11px;white-space:normal;overflow-wrap:anywhere}
-  #lista .observaciones{padding:0 12px 8px;font-size:11px;overflow-wrap:anywhere}
-  #lista .botones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:9px 10px 11px}
-  #lista .botones button{min-height:39px;font-size:10px;padding:6px 3px}
-  .modo-seleccion-activo .seleccion-check{top:48px!important;right:12px!important}
+/* ===== Catálogo editorial de peluches: diseño tipo tienda ===== */
+:root{
+ --primario:#8e5aa8;--primario-oscuro:#70465b;--secundario:#d98ca8;
+ --fondo:#fffafb;--texto:#302832;--muted:#81747d;--borde:#f0e4e8;
+ --blanco:#fff;--sombra:0 12px 34px rgba(91,58,75,.08);
+}
+body{
+ background:linear-gradient(90deg,#f3dfe4 0,#f3dfe4 17%,#fff 17%,#fff 100%);
+ color:var(--texto);padding:18px;
+}
+.contenedor{width:min(1280px,100%)}
+.encabezado{
+ background:rgba(255,255,255,.94);color:var(--texto);border:1px solid #f1e4e8;
+ box-shadow:0 8px 28px rgba(91,58,75,.07);border-radius:22px;padding:17px 22px;
+}
+.encabezado-icono{background:#f7e9ed;border:1px solid #f0dce3}
+.encabezado p,.encabezado-titulo span{color:var(--muted)}
+.btn-menu{color:var(--primario-oscuro)}
+.resumen{gap:10px}
+.estadistica{border:1px solid #f1e6e9;box-shadow:0 5px 18px rgba(91,58,75,.045);border-radius:16px}
+.panel-busqueda,.formulario-panel{border:1px solid #f0e4e8;box-shadow:0 8px 24px rgba(91,58,75,.055);border-radius:20px;background:#fff}
+.filtro.activo{background:#f4e5eb;color:#70465b;border-color:#e8cbd5}
+.resultado-info h2{color:#70465b}
+#lista{display:flex;flex-direction:column;gap:17px;margin-top:15px}
+#lista .tarjeta{
+ display:grid;grid-template-columns:minmax(190px,255px) minmax(0,1fr);
+ grid-template-areas:"foto info" "mini info" "acciones acciones";
+ align-items:stretch;min-width:0;overflow:hidden;background:#fff;
+ border:1px solid #f0e5e8;border-radius:22px;
+ box-shadow:0 8px 26px rgba(91,58,75,.065);transition:box-shadow .2s,transform .2s;
+}
+#lista .tarjeta:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(91,58,75,.11)}
+#lista .seleccion-check{position:absolute;z-index:3;top:13px;left:13px;width:19px;height:19px;accent-color:#8e5aa8}
+#lista .imagen-principal{grid-area:foto;height:218px;margin:17px 0 0 17px;border-radius:22px;background:#f4efea;overflow:hidden;position:relative}
+#lista .imagen-principal img{width:100%;height:100%;object-fit:contain;padding:12px}
+#lista .imagen-principal .badge-estado{top:10px;left:10px;right:auto}
+#lista .cantidad-badge{right:9px;bottom:9px}
+#lista .miniaturas{grid-area:mini;display:flex;gap:7px;justify-content:center;align-items:flex-start;min-height:48px;padding:8px 12px 12px 17px}
+#lista .miniaturas img{width:42px;height:42px;object-fit:cover;border-radius:10px;border:2px solid #eee3e8;cursor:pointer}
+#lista .info{grid-area:info;min-width:0;padding:23px 25px 15px;display:flex;flex-direction:column;align-items:flex-start}
+#lista .info h3{font-size:clamp(18px,2vw,22px);line-height:1.25;color:#302832;margin:0 0 8px;cursor:pointer}
+#lista .info h3:hover{color:#8e5aa8;text-decoration:underline;text-underline-offset:3px}
+#lista .etiquetas{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 5px}
+#lista .etiqueta-chip{background:#f8eff3;color:#78596a;border:1px solid #f0e2e8;border-radius:20px;padding:5px 9px;font-size:11px;font-weight:800}
+#lista .precio{font-size:24px;color:#70465b;margin:3px 0 12px}
+#lista .datos{width:100%;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+#lista .dato{background:#fbf8f9;border:1px solid #f2e9ec;border-radius:11px;padding:8px 10px;min-width:0}
+#lista .dato small{font-size:9px;letter-spacing:.035em;color:#8a7a82}
+#lista .dato strong{font-size:13px;overflow-wrap:anywhere}
+#lista .observaciones{font-size:12px;color:#756872;margin:10px 0 0;line-height:1.45}
+#lista .botones{grid-area:acciones;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:11px 17px 15px;border-top:1px solid #f3e9ec;background:#fff}
+#lista .botones button{min-height:39px;border-radius:11px;font-size:12px}
+#lista .sin-foto{height:100%;display:grid;place-items:center;font-size:58px;background:#f4efea}
+@media(max-width:760px){
+ body{padding:10px;background:linear-gradient(90deg,#f5e6ea 0,#f5e6ea 11%,#fff 11%,#fff 100%)}
+ .encabezado{padding:13px;border-radius:17px;gap:10px}.encabezado-icono{width:48px;height:48px;flex-basis:48px;font-size:27px}
+ .encabezado h1{font-size:clamp(19px,5vw,27px)}
+ #lista{gap:12px}
+ #lista .tarjeta{grid-template-columns:minmax(112px,36%) minmax(0,1fr);grid-template-areas:"foto info" "mini info" "acciones acciones";border-radius:17px}
+ #lista .imagen-principal{height:165px;margin:11px 0 0 11px;border-radius:15px}
+ #lista .imagen-principal img{padding:7px}
+ #lista .miniaturas{min-height:39px;padding:6px 5px 8px 10px;flex-wrap:wrap}
+ #lista .miniaturas img{width:31px;height:31px}
+ #lista .info{padding:15px 11px 10px}
+ #lista .info h3{font-size:15px;margin-bottom:6px}
+ #lista .precio{font-size:19px;margin:3px 0 8px}
+ #lista .datos{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+ #lista .dato{padding:6px 7px}
+ #lista .dato small{font-size:8px}
+ #lista .dato strong{font-size:11px}
+ #lista .observaciones{font-size:10px}
+ #lista .botones{grid-template-columns:repeat(4,minmax(0,1fr));padding:8px 10px 10px;gap:5px}
+ #lista .botones button{font-size:10px;min-height:35px;padding:6px 3px}
 }
 @media(max-width:390px){
-  #lista .imagen-principal,#lista .imagen-principal img{height:170px!important;min-height:170px!important;max-height:170px!important}
-  #lista .info h3{font-size:15px}
-  #lista .botones button{font-size:9px}
+ #lista .tarjeta{grid-template-columns:105px minmax(0,1fr)}
+ #lista .imagen-principal{height:145px}
+ #lista .info{padding:12px 8px 8px}
+ #lista .info h3{font-size:14px}
+ #lista .botones button{font-size:9px}
 }
