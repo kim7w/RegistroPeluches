@@ -1899,11 +1899,12 @@ async function iniciarOCR() {
 
 let scannerDestinoIngresoFila = null;
 
-function abrirScannerParaIngresoFila(fila) {
+async function abrirScannerParaIngresoFila(fila) {
+    if (!fila || !fila.isConnected) return;
     scannerDestinoIngresoFila = fila;
     const estado = document.getElementById("scannerEstado");
     if (estado) estado.textContent = "Preparando cámara para llenar el código de barras de esta fila...";
-    abrirScanner();
+    await abrirScanner();
 }
 
 async function abrirScanner() {
@@ -1931,19 +1932,33 @@ async function abrirScanner() {
         scanner = new Html5Qrcode("reader");
         scannerActivo = true;
 
+        const formatos = [];
+        if (typeof Html5QrcodeSupportedFormats !== "undefined") {
+            ["CODE_128","CODE_39","EAN_13","EAN_8","UPC_A","UPC_E","ITF","CODABAR","QR_CODE"]
+                .forEach(nombre => {
+                    if (Html5QrcodeSupportedFormats[nombre] !== undefined) {
+                        formatos.push(Html5QrcodeSupportedFormats[nombre]);
+                    }
+                });
+        }
+
         await scanner.start(
             { facingMode: camaraFacingMode },
             {
-                fps: 10,
-                qrbox: {
-                    width: 320,
-                    height: 180
+                fps: 12,
+                aspectRatio: 1.777778,
+                ...(formatos.length ? { formatsToSupport: formatos } : {}),
+                qrbox: (ancho, alto) => ({
+                    width: Math.max(160, Math.min(ancho - 24, 420)),
+                    height: Math.max(90, Math.min(alto - 24, 180))
+                }),
+                videoConstraints: {
+                    facingMode: camaraFacingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
                 }
             },
-            codigo => {
-                // Esta ruta sigue funcionando para códigos de barras/QR.
-                procesarCodigoEscaneado(codigo);
-            },
+            codigo => procesarCodigoEscaneado(codigo),
             () => {}
         );
 
